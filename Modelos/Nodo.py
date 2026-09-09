@@ -20,3 +20,4 @@ class Nodo:
     @property
     def obtener_altura(self) -> int:
         return self.altura
+    
