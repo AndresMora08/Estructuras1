@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional
-from Negocio.modelos.Evento import Evento
+from Evento import Evento
 @dataclass
 class Nodo:
     evento:Evento
