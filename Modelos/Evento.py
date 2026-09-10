@@ -1,4 +1,4 @@
-from Epicentro import Epicentro
+from .Epicentro import Epicentro
 class Evento:
 
     def __init__(
@@ -37,3 +37,21 @@ class Evento:
         else:
            p=1
         self.actualizar_prioridad_y_clave(p)
+        
+    def ver_info(self):
+        return {
+            "id": self.id,
+            "magnitud": self.magnitud,
+            "profundidad": self.profundidad,
+            "epicentro": {
+                "x": self.epicentro.x,
+                "y": self.epicentro.y,
+                "zona_poblada": self.epicentro.zona.poblada
+            },
+            "fecha_hora": self.fecha_hora,
+            "revision": self.revision,
+            "estado": self.estado,
+            "estaciones": self.estaciones,
+            "prioridad": self.prioridad,
+            "clave": self.clave
+        }

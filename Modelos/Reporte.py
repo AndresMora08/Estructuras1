@@ -1,5 +1,5 @@
-from Evento import Evento
-from Estacion import Estacion
+from .Evento import Evento
+from .Estacion import Estacion
 
 class Reporte:
     

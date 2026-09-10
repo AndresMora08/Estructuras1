@@ -1,7 +1,7 @@
 from collections import deque
 from typing import Optional, List, Tuple, Dict
-from Nodo import Nodo
-from Evento import Evento
+from .Nodo import Nodo
+from .Evento import Evento
 
 
 class AVL:
@@ -60,54 +60,50 @@ class AVL:
         self.conteo_rotaciones["giros_simples"] += 1
         return y
     
-    def insertar(self, evento: Evento) -> None:
-        nuevo_nodo = Nodo(evento)
-        self.raiz = self._insertar(self.raiz, nuevo_nodo)
+    def insertar(self, nodo: Nodo) -> None:
+        """Recibe una instancia de Nodo ya creada y la inserta en el árbol."""
+        self.raiz = self._insertar(self.raiz, nodo)
 
-    def _insertar(self, nodo: Optional[Nodo], nuevo_nodo: Nodo) -> Nodo:
-        if nodo is None:
+    def _insertar(self, nodo_actual: Optional[Nodo], nuevo_nodo: Nodo) -> Nodo:
+        if nodo_actual is None:
             return nuevo_nodo
 
         # Comparación lexicográfica utilizando la tupla clave = (P, M, I)
-        if nuevo_nodo.clave < nodo.clave:
-            nodo.izquierda = self._insertar(nodo.izquierda, nuevo_nodo)
-        elif nuevo_nodo.clave > nodo.clave:
-            nodo.derecha = self._insertar(nodo.derecha, nuevo_nodo)
+        if nuevo_nodo.clave < nodo_actual.clave:
+            nodo_actual.izquierda = self._insertar(nodo_actual.izquierda, nuevo_nodo)
+        elif nuevo_nodo.clave > nodo_actual.clave:
+            nodo_actual.derecha = self._insertar(nodo_actual.derecha, nuevo_nodo)
         else:
-            # Clave idéntica detectada (no debe duplicarse nodo)
-            return nodo
+            # Clave duplicada
+            return nodo_actual
 
-        self._actualizar_altura(nodo)
+        self._actualizar_altura(nodo_actual)
 
-        # Si está activado el modo estrés, no rebalanceamos (se comporta como BST)
         if self.modo_estres:
-            return nodo
+            return nodo_actual
 
-        balance = self._factor_balance(nodo)
+        balance = self._factor_balance(nodo_actual)
 
-        # Caso Izquierda-Izquierda (LL)
-        if balance > 1 and nuevo_nodo.clave < nodo.izquierda.clave:
+        # Rebalanceo AVL
+        if balance > 1 and nuevo_nodo.clave < nodo_actual.izquierda.clave:
             self.conteo_rotaciones["LL"] += 1
-            return self._rotacion_derecha(nodo)
+            return self._rotacion_derecha(nodo_actual)
 
-        # Caso Derecha-Derecha (RR)
-        if balance < -1 and nuevo_nodo.clave > nodo.derecha.clave:
+        if balance < -1 and nuevo_nodo.clave > nodo_actual.derecha.clave:
             self.conteo_rotaciones["RR"] += 1
-            return self._rotacion_izquierda(nodo)
+            return self._rotacion_izquierda(nodo_actual)
 
-        # Caso Izquierda-Derecha (LR)
-        if balance > 1 and nuevo_nodo.clave > nodo.izquierda.clave:
+        if balance > 1 and nuevo_nodo.clave > nodo_actual.izquierda.clave:
             self.conteo_rotaciones["LR"] += 1
-            nodo.izquierda = self._rotacion_izquierda(nodo.izquierda)
-            return self._rotacion_derecha(nodo)
+            nodo_actual.izquierda = self._rotacion_izquierda(nodo_actual.izquierda)
+            return self._rotacion_derecha(nodo_actual)
 
-        # Caso Derecha-Izquierda (RL)
-        if balance < -1 and nuevo_nodo.clave < nodo.derecha.clave:
+        if balance < -1 and nuevo_nodo.clave < nodo_actual.derecha.clave:
             self.conteo_rotaciones["RL"] += 1
-            nodo.derecha = self._rotacion_derecha(nodo.derecha)
-            return self._rotacion_izquierda(nodo)
+            nodo_actual.derecha = self._rotacion_derecha(nodo_actual.derecha)
+            return self._rotacion_izquierda(nodo_actual)
 
-        return nodo
+        return nodo_actual
     
     def _esta_desbalanceado(self, nodo: Optional[Nodo]) -> bool:
         if nodo is None:
@@ -161,3 +157,44 @@ class AVL:
             mientras_desbalanceado = self._esta_desbalanceado(self.raiz)
 
         self.modo_estres = False
+        
+    def mostrar_arbol_consola(self) -> None:
+        """Muestra el árbol de forma horizontal/espaciada.
+
+        Arriba: Subárbol Derecho (Valores mayores)
+        Centro: Raíz / Nodo actual
+        Abajo: Subárbol Izquierdo (Valores menores)
+        """
+        if self.raiz is None:
+            print("\n[ ÁRBOL AVL VACÍO ]\n")
+            return
+
+        print("\n" + "=" * 60)
+        self._imprimir_nodo_espaciado(self.raiz, nivel=0)
+        print("=" * 60 + "\n")
+
+    def _imprimir_nodo_espaciado(
+        self, nodo: Optional[Nodo], nivel: int
+    ) -> None:
+        if nodo is None:
+            return
+
+        # 1. Procesar primero el hijo DERECHO (se imprime arriba)
+        self._imprimir_nodo_espaciado(nodo.derecha, nivel + 1)
+
+        # 2. Imprimir el NODO ACTUAL con sangría según su nivel de profundidad
+        espacios = "         " * nivel  # 9 espacios por nivel
+        
+        # Formato claro del nodo
+        info = f"[ID:{nodo.evento.id} | K={nodo.clave} | H:{nodo.altura}]"
+
+        if nivel == 0:
+            print(f"RAÍZ ──> {info}")
+        else:
+            print(f"{espacios}└── {info}")
+
+        # Separador vertical suave para dar más aire entre ramas
+        print(f"{espacios}    │")
+
+        # 3. Procesar el hijo IZQUIERDO (se imprime abajo)
+        self._imprimir_nodo_espaciado(nodo.izquierda, nivel + 1)

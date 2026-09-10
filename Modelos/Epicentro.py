@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from Zona import Zona
+from .Zona import Zona
 class Epicentro:
 
     def __init__(self, x: float, y: float, zonas_escenario: List[Zona] = None):

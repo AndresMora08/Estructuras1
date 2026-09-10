@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional
-from Evento import Evento
+from .Evento import Evento
 @dataclass
 class Nodo:
     evento:Evento
@@ -21,3 +21,10 @@ class Nodo:
     def obtener_altura(self) -> int:
         return self.altura
     
+    def ver_info(self):
+        return {
+            "evento": self.evento.ver_info(),
+            "izquierda": self.izquierda.ver_info() if self.izquierda else None,
+            "derecha": self.derecha.ver_info() if self.derecha else None,
+            "altura": self.altura
+        }

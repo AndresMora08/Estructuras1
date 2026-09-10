@@ -1,10 +1,10 @@
 from collections import deque
 from datetime import datetime as Datetime
 from typing import Dict, List, Optional
-from AVL import AVL
-from Estacion import Estacion
-from Evento import Evento
-from Zona import Zona
+from .AVL import AVL
+from .Estacion import Estacion
+from .Evento import Evento
+from .Zona import Zona
 
 
 class Escenario:
