@@ -198,3 +198,5 @@ class AVL:
 
         # 3. Procesar el hijo IZQUIERDO (se imprime abajo)
         self._imprimir_nodo_espaciado(nodo.izquierda, nivel + 1)
+        
+        # 
