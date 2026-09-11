@@ -28,3 +28,14 @@ class Nodo:
             "derecha": self.derecha.ver_info() if self.derecha else None,
             "altura": self.altura
         }
+        
+    def es_hoja(self) -> bool:
+        return self.izquierda is None and self.derecha is None
+    
+    def tiene_hijo_izquierdo(self) -> bool:
+        return self.izquierda is not None
+    
+    def tiene_hijo_derecho(self) -> bool:
+        return self.derecha is not None
+    def tiene_dos_hijos(self) -> bool:
+        return self.izquierda is not None and self.derecha is not None
