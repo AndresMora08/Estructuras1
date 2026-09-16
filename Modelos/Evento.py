@@ -8,6 +8,7 @@ class Evento:
         profundidad,
         epicentro: Epicentro,
         fecha_hora,
+        #hacer obligatorio que se pase una estacion origen, para que se pueda crear un evento
         
     ):
         self.id = int(id)
@@ -55,3 +56,5 @@ class Evento:
             "prioridad": self.prioridad,
             "clave": self.clave
         }
+        
+  
