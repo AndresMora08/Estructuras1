@@ -290,7 +290,7 @@ class AVL:
         return raiz
     
     def buscar(self, clave: Tuple[int, float, int]) -> Optional[Nodo]:
-        """Búsqueda eficiente en el AVL usando la tupla clave O(log n)."""
+       #con la tupla clave
         return self._buscar(self.raiz, clave)
 
     def _buscar(self, nodo: Optional[Nodo], clave: Tuple[int, float, int]) -> Optional[Nodo]:
@@ -301,3 +301,28 @@ class AVL:
             return self._buscar(nodo.izquierda, clave)
 
         return self._buscar(nodo.derecha, clave)
+    
+    def archivar_evento(self,clave:Tuple[int,float,int])-> List[Evento]:
+        
+        raiz_subarbol=self.buscar(clave)
+        if raiz_subarbol is None:
+            return []
+        
+        subarbol=self.encontrar_descendientes(raiz_subarbol)
+        
+        for evento in subarbol:
+            self.eliminar(evento.clave)
+        
+        return subarbol
+    
+    def encontrar_descendientes(self, raiz_subarbol:Nodo)->List[Evento]:
+     
+     if raiz_subarbol is None:
+         return []
+     
+     descendencia=[]
+     descendencia.append(raiz_subarbol.evento)
+     descendencia.extend(self.encontrar_descendientes(raiz_subarbol.izquierda))
+     descendencia.extend(self.encontrar_descendientes(raiz_subarbol.derecha))
+     
+     return descendencia

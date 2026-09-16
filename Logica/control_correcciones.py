@@ -30,12 +30,9 @@ class ControladorCorrecciones:
       
         if clave_nueva == clave_vieja:
          
-            
-            evento_viejo.magnitud = evento_nuevo.magnitud
             evento_viejo.profundidad = evento_nuevo.profundidad
             evento_viejo.epicentro = evento_nuevo.epicentro
             evento_viejo.fecha_hora = evento_nuevo.fecha_hora
-            evento_viejo.prioridad = evento_nuevo.prioridad
             evento_viejo.revision = evento_nuevo.revision
             evento_viejo.estado = "Pendiente"
             evento_viejo.clave = clave_nueva
