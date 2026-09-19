@@ -1,16 +1,29 @@
 import tkinter as tk
+
+# Importaciones de tu proyecto
+from Modelos.AVL import AVL
 from Modelos.Escenario import Escenario
-from Vista.interfaz import SismoLabGUI  # Ajusta la ruta de importación según tu estructura
+from Vista.interfaz import SismoLabGUI
 
-if __name__ == "__main__":
-  # 1. Crear el objeto de Escenario global único
-  escenario_global = Escenario()
 
-  # 2. Inicializar Tkinter
+def main():
+  # 1. Instanciar el árbol AVL
+  arbol_avl = AVL()
+
+  # 2. Instanciar el escenario pasando el árbol AVL y las listas iniciales
+  escenario = Escenario(
+      zonas=[], estaciones=[], epicentros=[], arbol_avl=arbol_avl
+  )
+
+  # 3. Inicializar la ventana de Tkinter
   root = tk.Tk()
 
-  # 3. Pasar el escenario a la interfaz gráfica
-  app = SismoLabGUI(root, escenario=escenario_global)
+  # 4. Iniciar la interfaz con el escenario enlazado
+  app = SismoLabGUI(root=root, escenario=escenario)
 
-  # 4. Iniciar el loop de la interfaz
+  # 5. Bucle principal de ejecución
   root.mainloop()
+
+
+if __name__ == "__main__":
+  main()

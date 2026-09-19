@@ -6,7 +6,9 @@ from Modelos.Epicentro import Epicentro
 from Modelos.Escenario import Escenario
 from Modelos.Estacion import Estacion
 from Modelos.Evento import Evento
+from Modelos.Nodo import Nodo
 from Modelos.Zona import Zona
+from Vista.VisualizadorAVL import VisualizadorAVL
 
 
 class SismoLabGUI:
@@ -17,7 +19,7 @@ class SismoLabGUI:
 
     # Configuración de la ventana principal
     self.root.title("SismoLab AVL - Monitor")
-    self.root.geometry("800x500")
+    self.root.geometry("850x500")
 
     # Componentes base
     self._agregar_mensaje_prueba()
@@ -36,27 +38,47 @@ class SismoLabGUI:
     btn_zona = ttk.Button(
         frame_botones, text="Crear Zona", command=self._abrir_formulario_zona
     )
-    btn_zona.pack(side=tk.LEFT, padx=10)
+    btn_zona.pack(side=tk.LEFT, padx=5)
 
     btn_estacion = ttk.Button(
         frame_botones,
         text="Crear Estación",
         command=self._abrir_formulario_estacion,
     )
-    btn_estacion.pack(side=tk.LEFT, padx=10)
+    btn_estacion.pack(side=tk.LEFT, padx=5)
 
     btn_epicentro = ttk.Button(
         frame_botones,
         text="Crear Epicentro",
         command=self._abrir_formulario_epicentro,
     )
-    btn_epicentro.pack(side=tk.LEFT, padx=10)
+    btn_epicentro.pack(side=tk.LEFT, padx=5)
 
-    # Botón 'Crear Evento' enlazado
     btn_evento = ttk.Button(
         frame_botones, text="Crear Evento", command=self._abrir_formulario_evento
     )
-    btn_evento.pack(side=tk.LEFT, padx=10)
+    btn_evento.pack(side=tk.LEFT, padx=5)
+
+    # Botón para abrir el visualizador gráfico del Árbol AVL
+    btn_ver_arbol = ttk.Button(
+        frame_botones,
+        text="Ver Árbol AVL",
+        command=self._abrir_visualizador_arbol,
+    )
+    btn_ver_arbol.pack(side=tk.LEFT, padx=5)
+
+  def _abrir_visualizador_arbol(self):
+    if (
+        getattr(self.escenario, "arbol_avl", None) is None
+        or self.escenario.arbol_avl.raiz is None
+    ):
+      messagebox.showinfo(
+          "Árbol Vacío",
+          "El árbol AVL no contiene eventos registrados aún.",
+          parent=self.root,
+      )
+      return
+    VisualizadorAVL(self.root, self.escenario.arbol_avl)
 
   # ------------------------------------------------------------------
   # FORMULARIO / VENTANA MODAL PARA CREAR ZONA
@@ -428,21 +450,21 @@ class SismoLabGUI:
     frame_campos.pack(fill="x", padx=20, pady=15)
 
     # ID Evento
-    ttk.Label(frame_campos, text="ID Evento (Entero):").grid(
+    ttk.Label(frame_campos, text="ID Evento (1 - 999999):").grid(
         row=0, column=0, sticky="w", pady=5
     )
     entry_id = ttk.Entry(frame_campos, width=18)
     entry_id.grid(row=0, column=1, padx=5, pady=5)
 
     # Magnitud
-    ttk.Label(frame_campos, text="Magnitud (0.0 - 10.0):").grid(
+    ttk.Label(frame_campos, text="Magnitud (-2.0 a 10.0):").grid(
         row=1, column=0, sticky="w", pady=5
     )
     entry_mag = ttk.Entry(frame_campos, width=18)
     entry_mag.grid(row=1, column=1, padx=5, pady=5)
 
     # Profundidad
-    ttk.Label(frame_campos, text="Profundidad (km):").grid(
+    ttk.Label(frame_campos, text="Profundidad (0 - 700 km):").grid(
         row=2, column=0, sticky="w", pady=5
     )
     entry_prof = ttk.Entry(frame_campos, width=18)
@@ -492,51 +514,41 @@ class SismoLabGUI:
     entry_fecha.grid(row=5, column=1, padx=5, pady=5)
 
     def guardar_evento():
-      # Validar ID
       try:
         id_evento = int(entry_id.get().strip())
+        if not (1 <= id_evento <= 999999):
+          raise ValueError()
       except ValueError:
         messagebox.showerror(
             "Error de Validación",
-            "El ID del evento debe ser un número entero válido.",
+            "El ID del evento debe ser un número entero entre 1 y 999999.",
             parent=ventana_evt,
         )
         return
 
-      # Validar duplicados de ID en el escenario/árbol
-      if hasattr(self.escenario, "eventos_arbol"):
-        if self.escenario.eventos_arbol.buscar(id_evento) is not None:
-          messagebox.showerror(
-              "Error de Validación",
-              f"Ya existe un evento con el ID '{id_evento}'.",
-              parent=ventana_evt,
-          )
-          return
-
-      # Validar Magnitud y Profundidad
       try:
-        magnitud = float(entry_mag.get())
-        profundidad = float(entry_prof.get())
+        magnitud = float(entry_mag.get().strip())
+        profundidad = float(entry_prof.get().strip())
       except ValueError:
         messagebox.showerror(
             "Error de Validación",
-            "La magnitud y profundidad deben ser números válidos.",
+            "La magnitud y la profundidad deben ser números válidos.",
             parent=ventana_evt,
         )
         return
 
-      if not (0.0 <= magnitud <= 10.0):
+      if not (-2.0 <= magnitud <= 10.0):
         messagebox.showerror(
             "Error de Rango",
-            "La magnitud debe estar entre 0.0 y 10.0.",
+            "La magnitud debe estar entre -2.0 y 10.0.",
             parent=ventana_evt,
         )
         return
 
-      if profundidad < 0.0:
+      if not (0.0 <= profundidad <= 700.0):
         messagebox.showerror(
             "Error de Rango",
-            "La profundidad no puede ser negativa.",
+            "La profundidad debe estar entre 0.0 y 700.0 km.",
             parent=ventana_evt,
         )
         return
@@ -545,6 +557,7 @@ class SismoLabGUI:
       estacion_sel = estaciones_dict[combo_estacion.get()]
       fecha_txt = entry_fecha.get().strip() or None
 
+      # Instanciar Evento y Encapsularlo en un Nodo
       nuevo_evento = Evento(
           id_evento=id_evento,
           magnitud=magnitud,
@@ -553,18 +566,19 @@ class SismoLabGUI:
           estacion_origen=estacion_sel,
           fecha_hora=fecha_txt,
       )
+      nuevo_nodo = Nodo(evento=nuevo_evento)
 
-      # Inserción en el escenario
-      if hasattr(self.escenario, "eventos_arbol"):
-        self.escenario.eventos_arbol.insertar(nuevo_evento)
-      elif hasattr(self.escenario, "eventos"):
-        self.escenario.eventos.append(nuevo_evento)
+      # Insertar el nodo en el árbol AVL del escenario
+      if getattr(self.escenario, "arbol_avl", None) is not None:
+        self.escenario.arbol_avl.insertar(nuevo_nodo)
 
       messagebox.showinfo(
           "Éxito",
-          f"Evento #{nuevo_evento.id} creado con éxito.\n"
-          f"Prioridad asignada: {nuevo_evento.prioridad}\n"
-          f"Estación origen: {estacion_sel.id_estacion}",
+          f"Evento SIS-{nuevo_evento.id:06d} registrado e insertado en el"
+          " árbol AVL.\n\n"
+          f"• Prioridad: {nuevo_evento.prioridad}\n"
+          f"• Clave (P, M, ID): {nuevo_evento.clave}\n"
+          f"• Estación origen: {estacion_sel.id_estacion}",
           parent=ventana_evt,
       )
       ventana_evt.destroy()
