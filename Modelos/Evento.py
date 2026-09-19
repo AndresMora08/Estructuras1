@@ -1,4 +1,4 @@
-from .Epicentro import Epicentro
+from Modelos.Epicentro import Epicentro
 class Evento:
 
     def __init__(
@@ -56,5 +56,3 @@ class Evento:
             "prioridad": self.prioridad,
             "clave": self.clave
         }
-        
-  

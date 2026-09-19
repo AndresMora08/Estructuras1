@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SismoLab AVL - Panel de Control</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #0f172a; 
+            color: #f8fafc; 
+            display: flex; 
+            margin: 0; 
+            height: 100vh; 
+            overflow: hidden; 
+        }
+
+        .sidebar { 
+            width: 320px; 
+            background-color: #1e293b; 
+            padding: 20px; 
+            box-shadow: 2px 0 5px rgba(0,0,0,0.5); 
+            overflow-y: auto; 
+            height: 100vh; 
+            box-sizing: border-box; 
+        }
+
+        .main-content { 
+            flex: 1; 
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            overflow-y: auto; 
+            height: 100vh; 
+            box-sizing: border-box; 
+        }
+
+        .control-section { 
+            margin-bottom: 20px; 
+            border-bottom: 1px solid #334155; 
+            padding-bottom: 15px; 
+        }
+
+        h4, h6 { 
+            color: #38bdf8; 
+            margin-top: 0; 
+            margin-bottom: 10px; 
+        }
+        
+        button { 
+            width: 100%; 
+            padding: 10px; 
+            margin-bottom: 10px; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            color: white; 
+            transition: 0.2s; 
+        }
+        button:hover { opacity: 0.9; }
+
+        .btn-blue { background-color: #0284c7; }
+        .btn-orange { background-color: #ea580c; }
+        .btn-green { background-color: #16a34a; }
+        .btn-purple { background-color: #9333ea; }
+        .btn-teal { background-color: #14b8a6; }
+        .btn-red { background-color: #dc2626; }
+        .btn-yellow { background-color: #eab308; color: #0f172a; }
+        
+        .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        input { 
+            flex: 1; 
+            padding: 8px; 
+            border-radius: 4px; 
+            border: 1px solid #475569; 
+            background-color: #0f172a; 
+            color: white; 
+            width: 100%; 
+            box-sizing: border-box; 
+        }
+        
+        /* Contenedores visuales principales */
+        .map-container { 
+            position: relative; 
+            width: 100%; 
+            max-width: 600px; 
+            aspect-ratio: 1/1; 
+            background-color: #1e293b; 
+            border: 1px solid #334155; 
+            border-radius: 8px; 
+            margin-bottom: 20px; 
+        }
+
+        .tree-container { 
+            position: relative; 
+            width: 100%; 
+            max-width: 800px; 
+            background-color: #1e293b; 
+            border: 1px solid #334155; 
+            border-radius: 8px; 
+            margin-bottom: 20px; 
+            overflow: auto; 
+        }
+        
+        canvas { width: 100%; height: 100%; border-radius: 8px; display: block; }
+        svg { display: block; margin: auto; background-color: #1e293b; }
+
+        /* Consola de texto adaptada con un tamaño significativamente mayor */
+        .console { 
+            width: 100%; 
+            max-width: 800px; 
+            height: 400px !important; 
+            min-height: 400px !important; 
+            background-color: #020617; 
+            border: 2px solid #334155; 
+            border-radius: 8px; 
+            padding: 15px; 
+            font-family: 'Consolas', 'Courier New', monospace; 
+            font-size: 14px;
+            line-height: 1.6;
+            color: #38bdf8; 
+            overflow-y: scroll; 
+            box-sizing: border-box; 
+            margin-bottom: 50px; 
+            white-space: pre-wrap; 
+        }
+    </style>
+</head>
+<body>
+
+    <!-- BARRA LATERAL (Panel de Control) -->
+    <div class="sidebar">
+        <h4>Panel de Control</h4>
+        
+        <div class="control-section">
+            <h6>Cargar Datos de Sismos:</h6>
+            <button id="btn-cargar-avl" class="btn-blue">Cargar Datos al Árbol AVL</button>
+        </div>
+
+        <div class="control-section">
+            <h6>Cola de Reportes:</h6>
+            <button id="btn-procesar-reporte" class="btn-orange">⚡ Procesar Siguiente Reporte</button>
+        </div>
+
+        <div class="control-section">
+            <h6>Consultas Rápidas</h6>
+            <button id="btn-ver-todos" class="btn-blue" style="background-color: #334155;">Ver Todos los Eventos</button>
+            <button id="btn-consultar-pendientes" class="btn-green">🔍 Consultar Pendientes</button>
+        </div>
+
+        <div class="control-section">
+            <h6>Búsqueda por Rango AVL</h6>
+            <div class="input-group">
+                <input type="number" id="rango-min" placeholder="Mín (ej. 3.0)">
+                <input type="number" id="rango-max" placeholder="Máx (ej. 7.0)">
+            </div>
+            <button id="btn-buscar-rango" class="btn-blue">Buscar en Árbol</button>
+        </div>
+
+        <div class="control-section">
+            <h6>Comparación BST (Rendimiento)</h6>
+            <button id="btn-cargar-bst" class="btn-teal">Cargar Datos al Árbol BST</button>
+            <button id="btn-comparar" class="btn-red">📈 Comparar AVL vs BST</button>
+        </div>
+
+        <div class="control-section" style="border-bottom: none;">
+            <h6>Estado y Persistencia</h6>
+            <button id="btn-guardar-json" class="btn-green">💾 Guardar JSON</button>
+            <button id="btn-cargar-json" class="btn-blue" style="background-color: #475569;">📂 Cargar JSON</button>
+            <button id="btn-deshacer" class="btn-yellow">↩️ Deshacer Última Acción</button>
+            
+            <button id="btn-simular-sismo" class="btn-purple" style="margin-top: 15px;">+ Simular Nuevo Sismo</button>
+        </div>
+    </div>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <div class="main-content">
+        <!-- 1. MAPA GEOGRÁFICO -->
+        <h4 style="margin-bottom: 8px;">📍 Plano Geográfico (0 - 1000 km)</h4>
+        <div class="map-container">
+            <canvas id="plano-sismos" width="1000" height="1000"></canvas>
+        </div>
+
+        <!-- 2. VISUALIZACIÓN GRÁFICA DEL ÁRBOL AVL -->
+        <h4 style="margin-bottom: 8px;">🌳 Vista Gráfica del Árbol AVL</h4>
+        <div class="tree-container">
+            <svg id="avl-svg" width="900" height="450"></svg>
+        </div>
+
+        <!-- 3. CONSOLA DE RESULTADOS -->
+        <h4 style="margin-bottom: 8px;">Visualización de Resultados</h4>
+        <div class="console" id="consola-salida">> Esperando acciones del usuario...</div>
+    </div>
+
+    <!-- JAVASCRIPT: Conexión de Botones, Canvas y SVG AVL -->
+    <script>
+        const consola = document.getElementById('consola-salida');
+        const canvas = document.getElementById('plano-sismos');
+        const ctx = canvas.getContext('2d');
+
+        function escribirConsola(texto) {
+            consola.innerHTML += `<br>> ${texto}`;
+            consola.scrollTop = consola.scrollHeight;
+        }
+
+        function dibujarPlano(sismos) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            for(let i = 0; i <= 1000; i+=100) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 1000); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(1000, i); ctx.stroke();
+            }
+
+            if (!sismos || sismos.length === 0) return;
+
+            sismos.forEach(sismo => {
+                const posX = sismo.x;
+                const posY = canvas.height - sismo.y; 
+
+                ctx.beginPath();
+                const radio = Math.max(sismo.magnitud * 3, 5); 
+                ctx.arc(posX, posY, radio, 0, 2 * Math.PI);
+                
+                if (sismo.magnitud >= 6.0) {
+                    ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+                    ctx.strokeStyle = '#b91c1c';
+                } else {
+                    ctx.fillStyle = 'rgba(234, 179, 8, 0.8)';
+                    ctx.strokeStyle = '#a16207';
+                }
+                
+                ctx.fill();
+                ctx.stroke();
+            });
+        }
+
+        // --- LÓGICA PARA DIBUJAR EL ÁRBOL AVL EN EL SVG ---
+        async function cargarArbolAVLVisual() {
+            try {
+                let response = await fetch('/api/arbol-avl');
+                let data = await response.json();
+                
+                let svg = document.getElementById('avl-svg');
+                svg.innerHTML = ''; 
+                
+                if (data) {
+                    dibujarNodoAVL(data, svg, 450, 40, 200);
+                } else {
+                    let text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    text.setAttribute("x", "450");
+                    text.setAttribute("y", "225");
+                    text.setAttribute("text-anchor", "middle");
+                    text.setAttribute("fill", "#64748b");
+                    text.setAttribute("font-size", "14px");
+                    text.textContent = "El árbol AVL está vacío";
+                    svg.appendChild(text);
+                }
+            } catch (error) {
+                console.error("Error al cargar la visualización del AVL:", error);
+            }
+        }
+
+        function dibujarNodoAVL(nodo, svg, x, y, offset) {
+            if (!nodo) return;
+
+            let childY = y + 70;
+
+            if (nodo.left) {
+                let childX = x - offset;
+                crearLineaSVG(svg, x, y, childX, childY);
+                dibujarNodoAVL(nodo.left, svg, childX, childY, offset / 2);
+            }
+            if (nodo.right) {
+                let childX = x + offset;
+                crearLineaSVG(svg, x, y, childX, childY);
+                dibujarNodoAVL(nodo.right, svg, childX, childY, offset / 2);
+            }
+
+            crearCirculoNodoSVG(svg, x, y, nodo.key);
+        }
+
+        function crearLineaSVG(svg, x1, y1, x2, y2) {
+            let line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", x1);
+            line.setAttribute("y1", y1);
+            line.setAttribute("x2", x2);
+            line.setAttribute("y2", y2);
+            line.setAttribute("stroke", "#475569");
+            line.setAttribute("stroke-width", "2");
+            svg.appendChild(line);
+        }
+
+        function crearCirculoNodoSVG(svg, x, y, key) {
+            let g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+
+            let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", x);
+            circle.setAttribute("cy", y);
+            circle.setAttribute("r", "24");
+            circle.setAttribute("fill", "#0284c7");
+            circle.setAttribute("style", "cursor: pointer; transition: 0.2s;");
+
+            circle.onmouseover = () => circle.setAttribute("fill", "#16a34a");
+            circle.onmouseout = () => circle.setAttribute("fill", "#0284c7");
+            circle.onclick = () => escribirConsola(`Inspeccionando Nodo AVL -> [ ${key} ]`);
+
+            let text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            text.setAttribute("x", x);
+            text.setAttribute("y", y + 4);
+            text.setAttribute("text-anchor", "middle");
+            text.setAttribute("fill", "white");
+            text.setAttribute("font-size", "9px");
+            text.setAttribute("font-weight", "bold");
+            text.textContent = key;
+
+            g.appendChild(circle);
+            g.appendChild(text);
+            svg.appendChild(g);
+        }
+
+        // --- CONEXIÓN DE BOTONES ---
+
+        document.getElementById('btn-cargar-avl').addEventListener('click', () => {
+            escribirConsola("Cargando datos al Árbol AVL...");
+            fetch('/cargar_avl', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    escribirConsola(data.mensaje);
+                    if(data.sismos) dibujarPlano(data.sismos);
+                    cargarArbolAVLVisual();
+                })
+                .catch(() => escribirConsola("Error al conectar con el servidor para cargar AVL."));
+        });
+
+        document.getElementById('btn-procesar-reporte').addEventListener('click', () => {
+            fetch('/procesar_reporte', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => escribirConsola(data.mensaje))
+                .catch(() => escribirConsola("Error al procesar el siguiente reporte."));
+        });
+
+        document.getElementById('btn-ver-todos').addEventListener('click', () => {
+            fetch('/ver_todos')
+                .then(res => res.json())
+                .then(data => {
+                    escribirConsola("Mostrando todos los eventos registrados.");
+                    if(data.sismos) dibujarPlano(data.sismos);
+                    cargarArbolAVLVisual();
+                })
+                .catch(() => escribirConsola("Error al consultar todos los eventos."));
+        });
+
+        document.getElementById('btn-consultar-pendientes').addEventListener('click', () => {
+            fetch('/consultar_pendientes')
+                .then(res => res.json())
+                .then(data => escribirConsola(data.mensaje))
+                .catch(() => escribirConsola("Error al consultar reportes pendientes."));
+        });
+
+        document.getElementById('btn-buscar-rango').addEventListener('click', () => {
+            const min = document.getElementById('rango-min').value;
+            const max = document.getElementById('rango-max').value;
+            if(!min || !max) {
+                escribirConsola("⚠️ Por favor ingresa un rango mínimo y máximo válido.");
+                return;
+            }
+            escribirConsola(`Buscando sismos en rango de magnitud [${min} - ${max}]...`);
+            fetch(`/buscar_rango?min=${min}&max=${max}`)
+                .then(res => res.json())
+                .then(data => {
+                    escribirConsola(data.mensaje);
+                    if(data.sismos) dibujarPlano(data.sismos);
+                })
+                .catch(() => escribirConsola("Error en la búsqueda por rango."));
+        });
+
+        document.getElementById('btn-cargar-bst').addEventListener('click', () => {
+            escribirConsola("Cargando datos al Árbol BST para pruebas...");
+            fetch('/cargar_bst', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => escribirConsola(data.mensaje))
+                .catch(() => escribirConsola("Error al cargar datos en BST."));
+        });
+
+        document.getElementById('btn-comparar').addEventListener('click', () => {
+            escribirConsola("Ejecutando comparativa de rendimiento AVL vs BST...");
+            fetch('/comparar_rendimiento')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.exito) {
+                        escribirConsola(data.mensaje);
+                    } else {
+                        escribirConsola(`⚠️ ${data.mensaje}`);
+                    }
+                })
+                .catch(() => escribirConsola("Error en la conexión al comparar rendimiento."));
+        });
+
+        document.getElementById('btn-guardar-json').addEventListener('click', () => {
+            fetch('/guardar_json')
+                .then(res => res.json())
+                .then(data => escribirConsola(data.mensaje))
+                .catch(() => escribirConsola("Error al guardar JSON."));
+        });
+
+        document.getElementById('btn-cargar-json').addEventListener('click', () => {
+            fetch('/cargar_json', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    escribirConsola(data.mensaje);
+                    if(data.exito) {
+                        dibujarPlano(data.sismos);
+                        cargarArbolAVLVisual();
+                    }
+                })
+                .catch(() => escribirConsola("Error al cargar JSON."));
+        });
+
+        document.getElementById('btn-deshacer').addEventListener('click', () => {
+            fetch('/deshacer', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    escribirConsola(data.mensaje);
+                    if(data.exito) {
+                        dibujarPlano(data.sismos);
+                        cargarArbolAVLVisual();
+                    }
+                })
+                .catch(() => escribirConsola("Error en la conexión al deshacer."));
+        });
+
+        document.getElementById('btn-simular-sismo').addEventListener('click', () => {
+            const nuevoSismo = {
+                id: Math.floor(Math.random() * 9000) + 1000,
+                x: Math.floor(Math.random() * 1000),
+                y: Math.floor(Math.random() * 1000),
+                magnitud: parseFloat((Math.random() * 5 + 3).toFixed(1)),
+                profundidad: parseFloat((Math.random() * 40 + 5).toFixed(1)),
+                fecha_hora: new Date().toISOString().slice(0, 19).replace('T', ' ')
+            };
+
+            fetch('/insertar_sismo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(nuevoSismo)
+            })
+            .then(res => res.json())
+            .then(data => {
+                escribirConsola(data.mensaje + ` (Magnitud: ${nuevoSismo.magnitud})`);
+                if(data.exito) {
+                    dibujarPlano(data.sismos);
+                    cargarArbolAVLVisual();
+                }
+            });
+        });
+
+        dibujarPlano([]);
+        cargarArbolAVLVisual();
+    </script>
+</body>
+</html>

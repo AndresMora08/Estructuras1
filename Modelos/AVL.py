@@ -1,7 +1,7 @@
 from collections import deque
 from typing import Optional, List, Tuple, Dict
-from .Nodo import Nodo
-from .Evento import Evento
+from Modelos.Nodo import Nodo
+from Modelos.Evento import Evento
 
 
 class AVL:
@@ -183,7 +183,7 @@ class AVL:
         self._imprimir_nodo_espaciado(nodo.derecha, nivel + 1)
 
         # 2. Imprimir el NODO ACTUAL con sangría según su nivel de profundidad
-        espacios = "         " * nivel  # 9 espacios por nivel
+        espacios = "        " * nivel  # 9 espacios por nivel
         
         # Formato claro del nodo
         info = f"[ID:{nodo.evento.id} | K={nodo.clave} | H:{nodo.altura}]"
@@ -203,7 +203,7 @@ class AVL:
     def _buscar_minimo(self, raiz: Nodo) -> Nodo:
             actual = raiz
             while actual.tiene_hijo_izquierdo():
-              actual = actual.izquierda
+                actual = actual.izquierda
             return actual
         
     def eliminar(self, clave: Tuple[int, float, int]) -> None:

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
-from .Evento import Evento
+from Modelos.Evento import Evento
+
 @dataclass
 class Nodo:
     evento:Evento
@@ -37,5 +38,6 @@ class Nodo:
     
     def tiene_hijo_derecho(self) -> bool:
         return self.derecha is not None
+        
     def tiene_dos_hijos(self) -> bool:
         return self.izquierda is not None and self.derecha is not None
