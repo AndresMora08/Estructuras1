@@ -526,6 +526,15 @@ class SismoLabGUI:
         )
         return
 
+      # Validación rápida O(1) con dict_eventos
+      if id_evento in self.escenario.dict_eventos:
+        messagebox.showerror(
+            "Error de Validación",
+            f"Ya existe un evento registrado con el ID '{id_evento}'.",
+            parent=ventana_evt,
+        )
+        return
+
       try:
         magnitud = float(entry_mag.get().strip())
         profundidad = float(entry_prof.get().strip())
@@ -557,7 +566,7 @@ class SismoLabGUI:
       estacion_sel = estaciones_dict[combo_estacion.get()]
       fecha_txt = entry_fecha.get().strip() or None
 
-      # Instanciar Evento y Encapsularlo en un Nodo
+      # Instanciar Evento
       nuevo_evento = Evento(
           id_evento=id_evento,
           magnitud=magnitud,
@@ -566,16 +575,22 @@ class SismoLabGUI:
           estacion_origen=estacion_sel,
           fecha_hora=fecha_txt,
       )
-      nuevo_nodo = Nodo(evento=nuevo_evento)
 
-      # Insertar el nodo en el árbol AVL del escenario
+      # 1. Guardar en el diccionario de eventos O(1)
+      self.escenario.dict_eventos[id_evento] = nuevo_evento
+
+      # 2. Guardar en la lista histórica
+      self.escenario.historico.append(nuevo_evento)
+
+      # 3. Encapsular en un Nodo e insertar en el árbol AVL
+      nuevo_nodo = Nodo(evento=nuevo_evento)
       if getattr(self.escenario, "arbol_avl", None) is not None:
         self.escenario.arbol_avl.insertar(nuevo_nodo)
 
       messagebox.showinfo(
           "Éxito",
-          f"Evento SIS-{nuevo_evento.id:06d} registrado e insertado en el"
-          " árbol AVL.\n\n"
+          f"Evento SIS-{nuevo_evento.id:06d} registrado con éxito.\n\n"
+          f"• Guardado en dict_eventos[{id_evento}]\n"
           f"• Prioridad: {nuevo_evento.prioridad}\n"
           f"• Clave (P, M, ID): {nuevo_evento.clave}\n"
           f"• Estación origen: {estacion_sel.id_estacion}",
