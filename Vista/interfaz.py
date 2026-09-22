@@ -9,7 +9,7 @@ from Modelos.Evento import Evento
 from Modelos.Nodo import Nodo
 from Modelos.Zona import Zona
 from Vista.VisualizadorAVL import VisualizadorAVL
-
+from Vista.ConsultaEventos import ConsultaEventos
 
 class SismoLabGUI:
 
@@ -19,7 +19,7 @@ class SismoLabGUI:
 
     # Configuración de la ventana principal
     self.root.title("SismoLab AVL - Monitor")
-    self.root.geometry("850x500")
+    self.root.geometry("900x500")
 
     # Componentes base
     self._agregar_mensaje_prueba()
@@ -59,13 +59,34 @@ class SismoLabGUI:
     )
     btn_evento.pack(side=tk.LEFT, padx=5)
 
-    # Botón para abrir el visualizador gráfico del Árbol AVL
+    # Botón para abrir la vista gráfica del árbol desde su propio módulo
     btn_ver_arbol = ttk.Button(
         frame_botones,
         text="Ver Árbol AVL",
         command=self._abrir_visualizador_arbol,
     )
     btn_ver_arbol.pack(side=tk.LEFT, padx=5)
+
+    # Botón para la consulta de eventos
+    btn_consultar_evento = ttk.Button(
+        frame_botones,
+        text="Consultar Eventos",
+        command=self._abrir_busqueda,
+    )
+    btn_consultar_evento.pack(side=tk.LEFT, padx=5)
+
+  def _abrir_busqueda(self):
+    if(
+        getattr(self.escenario, "dict_eventos", None)is None
+        or self.escenario.dict_eventos is None
+    ):
+        messagebox.showinfo(
+            "Sin Eventos",
+            "No hay registro de eventos en el sistema",
+            parent=self.root,
+        )
+        return
+    ConsultaEventos(self.root, self.escenario.dict_eventos,getattr(self.escenario, "arbol_avl", None),)
 
   def _abrir_visualizador_arbol(self):
     if (
@@ -78,6 +99,7 @@ class SismoLabGUI:
           parent=self.root,
       )
       return
+    # Invocación directa a la vista encapsulada
     VisualizadorAVL(self.root, self.escenario.arbol_avl)
 
   # ------------------------------------------------------------------

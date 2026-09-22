@@ -6,13 +6,15 @@ from Modelos.AVL import AVL
 class VisualizadorAVL:
 
   def __init__(self, root: tk.Tk, arbol_avl: AVL):
+    """Crea una ventana secundaria para renderizar visualmente la estructura del Árbol AVL."""
     self.ventana = tk.Toplevel(root)
     self.ventana.title("SismoLab AVL - Estructura del Árbol")
     self.ventana.geometry("900x600")
+    self.ventana.grab_set()
 
     self.arbol_avl = arbol_avl
 
-    # Panel superior con controles
+    # Panel superior de control interno
     frame_controles = ttk.Frame(self.ventana)
     frame_controles.pack(fill="x", padx=10, pady=5)
 
@@ -21,13 +23,14 @@ class VisualizadorAVL:
     )
     btn_actualizar.pack(side=tk.LEFT, padx=5)
 
-    # Lienzo de dibujo (Canvas)
+    # Lienzo de dibujo gráfico (Canvas)
     self.canvas = tk.Canvas(self.ventana, bg="white")
     self.canvas.pack(fill="both", expand=True)
 
     self.dibujar_arbol()
 
-  def dibujar_arbol(self):
+  def dibujar_arbol(self) -> None:
+    """Limpia el lienzo y redibuja la jerarquía completa a partir de la raíz."""
     self.canvas.delete("all")
 
     if self.arbol_avl is None or self.arbol_avl.raiz is None:
@@ -51,14 +54,15 @@ class VisualizadorAVL:
         desplazamiento_x=ancho_canvas // 4,
     )
 
-  def _dibujar_nodo(self, nodo, x: int, y: int, desplazamiento_x: int):
+  def _dibujar_nodo(self, nodo, x: int, y: int, desplazamiento_x: int) -> None:
+    """Método recursivo que traza líneas y dibuja círculos representativos de cada nodo."""
     if nodo is None:
       return
 
     radio = 28
     distancia_y = 70
 
-    # Dibujar conexión con el hijo izquierdo
+    # 1. Trazo de conexión con el subárbol IZQUIERDO
     if nodo.izquierda:
       x_hijo = x - desplazamiento_x
       y_hijo = y + distancia_y
@@ -67,7 +71,7 @@ class VisualizadorAVL:
           nodo.izquierda, x_hijo, y_hijo, max(desplazamiento_x // 2, 30)
       )
 
-    # Dibujar conexión con el hijo derecho
+    # 2. Trazo de conexión con el subárbol DERECHO
     if nodo.derecha:
       x_hijo = x + desplazamiento_x
       y_hijo = y + distancia_y
@@ -76,7 +80,7 @@ class VisualizadorAVL:
           nodo.derecha, x_hijo, y_hijo, max(desplazamiento_x // 2, 30)
       )
 
-    # Dibujar figura del nodo
+    # 3. Dibujo de la figura contenedora (Círculo)
     self.canvas.create_oval(
         x - radio,
         y - radio,
@@ -87,7 +91,7 @@ class VisualizadorAVL:
         width=2,
     )
 
-    # Muestra únicamente ID y Clave (Prioridad, Magnitud, ID)
+    # 4. Renderizado del identificador único y clave AVL (P, M, ID)
     self.canvas.create_text(
         x,
         y - 6,
