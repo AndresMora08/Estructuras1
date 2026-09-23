@@ -12,11 +12,7 @@ class Epicentro:
             self.asignar_zona(zonas_escenario)
 
     def asignar_zona(self, zonas: List[Zona]) -> None:
-        """Determina a qué zona pertenece el punto.
-
-        Aplica la regla de desempate en bordes: si coincide con una poblada,
-        prevalece.
-        """
+    
         coincidentes = [z for z in zonas if z.contiene_punto(self.x, self.y)]
 
         if not coincidentes:
