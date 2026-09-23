@@ -1,108 +1,99 @@
 import tkinter as tk
-from tkinter import ttk
 from Modelos.AVL import AVL
 
 
 class VisualizadorAVL:
 
-  def __init__(self, root: tk.Tk, arbol_avl: AVL):
-    """Crea una ventana secundaria para renderizar visualmente la estructura del Árbol AVL."""
-    self.ventana = tk.Toplevel(root)
-    self.ventana.title("SismoLab AVL - Estructura del Árbol")
-    self.ventana.geometry("900x600")
-    self.ventana.grab_set()
+    def __init__(self, root: tk.Tk, arbol_avl: AVL):
+        # 1. Crear ventana modal sencilla
+        self.ventana = tk.Toplevel(root)
+        self.ventana.title("Visualizador Árbol AVL")
+        self.ventana.geometry("900x600")
 
-    self.arbol_avl = arbol_avl
+        self.arbol_avl = arbol_avl
 
-    # Panel superior de control interno
-    frame_controles = ttk.Frame(self.ventana)
-    frame_controles.pack(fill="x", padx=10, pady=5)
+        # 2. Botón de actualizar (Tkinter básico)
+        btn_actualizar = tk.Button(
+            self.ventana,
+            text="Actualizar Árbol",
+            bg="#0288D1",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            command=self.dibujar_arbol,
+        )
+        btn_actualizar.pack(pady=10)
 
-    btn_actualizar = ttk.Button(
-        frame_controles, text="Actualizar Árbol", command=self.dibujar_arbol
-    )
-    btn_actualizar.pack(side=tk.LEFT, padx=5)
+        # 3. Lienzo de dibujo (Canvas)
+        self.canvas = tk.Canvas(self.ventana, bg="white")
+        self.canvas.pack(fill="both", expand=True)
 
-    # Lienzo de dibujo gráfico (Canvas)
-    self.canvas = tk.Canvas(self.ventana, bg="white")
-    self.canvas.pack(fill="both", expand=True)
+        # Dibujar por primera vez
+        self.dibujar_arbol()
 
-    self.dibujar_arbol()
+    def dibujar_arbol(self):
+        """Limpia la pantalla y empieza el dibujo desde la raíz."""
+        self.canvas.delete("all")
 
-  def dibujar_arbol(self) -> None:
-    """Limpia el lienzo y redibuja la jerarquía completa a partir de la raíz."""
-    self.canvas.delete("all")
+        # Si el árbol está vacío, mostrar mensaje
+        if not self.arbol_avl or not self.arbol_avl.raiz:
+            self.canvas.create_text(
+                450,
+                250,
+                text="El Árbol AVL está vacío",
+                font=("Arial", 14, "bold"),
+                fill="gray",
+            )
+            return
 
-    if self.arbol_avl is None or self.arbol_avl.raiz is None:
-      self.canvas.create_text(
-          450,
-          300,
-          text="[ El Árbol AVL está vacío ]",
-          font=("Arial", 14, "bold"),
-          fill="gray",
-      )
-      return
+        # Dibujar a partir de la raíz en el centro del canvas
+        self._dibujar_nodo(
+            nodo=self.arbol_avl.raiz, x=450, y=50, desplazamiento=200
+        )
 
-    ancho_canvas = max(self.ventana.winfo_width(), 900)
-    x_inicial = ancho_canvas // 2
-    y_inicial = 50
+    def _dibujar_nodo(self, nodo, x: int, y: int, desplazamiento: int):
+        """Método recursivo sencillo para dibujar ramas y nodos."""
+        if nodo is None:
+            return
 
-    self._dibujar_nodo(
-        nodo=self.arbol_avl.raiz,
-        x=x_inicial,
-        y=y_inicial,
-        desplazamiento_x=ancho_canvas // 4,
-    )
+        radio = 25
+        separacion_y = 60
 
-  def _dibujar_nodo(self, nodo, x: int, y: int, desplazamiento_x: int) -> None:
-    """Método recursivo que traza líneas y dibuja círculos representativos de cada nodo."""
-    if nodo is None:
-      return
+        # --- DIBUJAR HIJO IZQUIERDO ---
+        if nodo.izquierda:
+            x_hijo = x - desplazamiento
+            y_hijo = y + separacion_y
+            # Línea de conexión
+            self.canvas.create_line(x, y, x_hijo, y_hijo, fill="gray", width=2)
+            # Llamada recursiva
+            self._dibujar_nodo(
+                nodo.izquierda, x_hijo, y_hijo, max(desplazamiento // 2, 30)
+            )
 
-    radio = 28
-    distancia_y = 70
+        # --- DIBUJAR HIJO DERECHO ---
+        if nodo.derecha:
+            x_hijo = x + desplazamiento
+            y_hijo = y + separacion_y
+            # Línea de conexión
+            self.canvas.create_line(x, y, x_hijo, y_hijo, fill="gray", width=2)
+            # Llamada recursiva
+            self._dibujar_nodo(
+                nodo.derecha, x_hijo, y_hijo, max(desplazamiento // 2, 30)
+            )
 
-    # 1. Trazo de conexión con el subárbol IZQUIERDO
-    if nodo.izquierda:
-      x_hijo = x - desplazamiento_x
-      y_hijo = y + distancia_y
-      self.canvas.create_line(x, y, x_hijo, y_hijo, fill="#555555", width=2)
-      self._dibujar_nodo(
-          nodo.izquierda, x_hijo, y_hijo, max(desplazamiento_x // 2, 30)
-      )
+        # --- DIBUJAR EL NODO (Círculo y Texto) ---
+        # Círculo
+        self.canvas.create_oval(
+            x - radio,
+            y - radio,
+            x + radio,
+            y + radio,
+            fill="#E1F5FE",
+            outline="#0288D1",
+            width=2,
+        )
 
-    # 2. Trazo de conexión con el subárbol DERECHO
-    if nodo.derecha:
-      x_hijo = x + desplazamiento_x
-      y_hijo = y + distancia_y
-      self.canvas.create_line(x, y, x_hijo, y_hijo, fill="#555555", width=2)
-      self._dibujar_nodo(
-          nodo.derecha, x_hijo, y_hijo, max(desplazamiento_x // 2, 30)
-      )
-
-    # 3. Dibujo de la figura contenedora (Círculo)
-    self.canvas.create_oval(
-        x - radio,
-        y - radio,
-        x + radio,
-        y + radio,
-        fill="#E1F5FE",
-        outline="#0288D1",
-        width=2,
-    )
-
-    # 4. Renderizado del identificador único y clave AVL (P, M, ID)
-    self.canvas.create_text(
-        x,
-        y - 6,
-        text=f"ID: {nodo.evento.id}",
-        font=("Arial", 9, "bold"),
-        fill="#01579B",
-    )
-    self.canvas.create_text(
-        x,
-        y + 8,
-        text=f"K: {nodo.clave}",
-        font=("Arial", 8),
-        fill="#333333",
-    )
+        # Texto interno
+        texto_nodo = f"ID: {nodo.evento.id}\nK: {nodo.clave}"
+        self.canvas.create_text(
+            x, y, text=texto_nodo, font=("Arial", 8, "bold"), fill="#01579B"
+        )

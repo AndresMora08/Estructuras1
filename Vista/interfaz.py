@@ -8,8 +8,9 @@ from Modelos.Estacion import Estacion
 from Modelos.Evento import Evento
 from Modelos.Nodo import Nodo
 from Modelos.Zona import Zona
-from Vista.VisualizadorAVL import VisualizadorAVL
 from Vista.ConsultaEventos import ConsultaEventos
+from Vista.VisualizadorAVL import VisualizadorAVL
+
 
 class SismoLabGUI:
 
@@ -17,81 +18,68 @@ class SismoLabGUI:
     self.root = root
     self.escenario = escenario
 
-    # Configuración de la ventana principal
     self.root.title("SismoLab AVL - Monitor")
-    self.root.geometry("900x500")
+    self.root.geometry("800x120")
 
-    # Componentes base
-    self._agregar_mensaje_prueba()
-    self._agregar_botones()
+    ttk.Label(
+        self.root, text="SismoLab AVL", font=("Arial", 14, "bold")
+    ).pack(pady=10)
 
-  def _agregar_mensaje_prueba(self):
-    etiqueta = ttk.Label(
-        self.root, text="¡Bienvenido a SismoLab AVL!", font=("Arial", 14, "bold")
-    )
-    etiqueta.pack(pady=20)
+    # Menú Principal de Botones
+    f_botones = ttk.Frame(self.root)
+    f_botones.pack(pady=5)
 
-  def _agregar_botones(self):
-    frame_botones = ttk.Frame(self.root)
-    frame_botones.pack(pady=10)
+    botones = [
+        ("Crear Zona", self._abrir_formulario_zona),
+        ("Crear Estación", self._abrir_formulario_estacion),
+        ("Crear Epicentro", self._abrir_formulario_epicentro),
+        ("Crear Evento", self._abrir_formulario_evento),
+        ("Ver Árbol AVL", self._abrir_visualizador_arbol),
+        ("Consultar Eventos", self._abrir_busqueda),
+    ]
 
-    btn_zona = ttk.Button(
-        frame_botones, text="Crear Zona", command=self._abrir_formulario_zona
-    )
-    btn_zona.pack(side=tk.LEFT, padx=5)
+    for texto, comando in botones:
+      ttk.Button(f_botones, text=texto, command=comando).pack(
+          side=tk.LEFT, padx=3
+      )
 
-    btn_estacion = ttk.Button(
-        frame_botones,
-        text="Crear Estación",
-        command=self._abrir_formulario_estacion,
-    )
-    btn_estacion.pack(side=tk.LEFT, padx=5)
+  # ------------------------------------------------------------------
+  # AUXILIAR PARA REDUCIR CÓDIGO DE INTERFAZ
+  # ------------------------------------------------------------------
+  def _crear_formulario(self, titulo: str, dimension: str):
+    """Crea una ventana modal básica y retorna el contenedor principal."""
+    win = tk.Toplevel(self.root)
+    win.title(titulo)
+    win.geometry(dimension)
+    win.resizable(False, False)
+    win.grab_set()
 
-    btn_epicentro = ttk.Button(
-        frame_botones,
-        text="Crear Epicentro",
-        command=self._abrir_formulario_epicentro,
-    )
-    btn_epicentro.pack(side=tk.LEFT, padx=5)
+    frame = ttk.Frame(win, padding=15)
+    frame.pack(fill="both", expand=True)
+    return win, frame
 
-    btn_evento = ttk.Button(
-        frame_botones, text="Crear Evento", command=self._abrir_formulario_evento
-    )
-    btn_evento.pack(side=tk.LEFT, padx=5)
-
-    # Botón para abrir la vista gráfica del árbol desde su propio módulo
-    btn_ver_arbol = ttk.Button(
-        frame_botones,
-        text="Ver Árbol AVL",
-        command=self._abrir_visualizador_arbol,
-    )
-    btn_ver_arbol.pack(side=tk.LEFT, padx=5)
-
-    # Botón para la consulta de eventos
-    btn_consultar_evento = ttk.Button(
-        frame_botones,
-        text="Consultar Eventos",
-        command=self._abrir_busqueda,
-    )
-    btn_consultar_evento.pack(side=tk.LEFT, padx=5)
-
+  # ------------------------------------------------------------------
+  # NAVEGACIÓN Y VISTAS
+  # ------------------------------------------------------------------
   def _abrir_busqueda(self):
-    if(
-        getattr(self.escenario, "dict_eventos", None)is None
-        or self.escenario.dict_eventos is None
-    ):
-        messagebox.showinfo(
-            "Sin Eventos",
-            "No hay registro de eventos en el sistema",
-            parent=self.root,
-        )
-        return
-    ConsultaEventos(self.root, self.escenario.dict_eventos,getattr(self.escenario, "arbol_avl", None),)
+    if not getattr(self.escenario, "dict_eventos", None):
+      messagebox.showinfo(
+          "Sin Eventos",
+          "No hay registro de eventos en el sistema.",
+          parent=self.root,
+      )
+      return
+    ConsultaEventos(
+        self.root,
+        self.escenario.dict_eventos,
+        getattr(self.escenario, "arbol_avl", None),
+        self.escenario,
+    )
 
   def _abrir_visualizador_arbol(self):
     if (
-        getattr(self.escenario, "arbol_avl", None) is None
-        or self.escenario.arbol_avl.raiz is None
+        not getattr(self.escenario, "arbol_avl", None)
+        or not self.escenario.arbol_avl.raiz
     ):
       messagebox.showinfo(
           "Árbol Vacío",
@@ -99,528 +87,327 @@ class SismoLabGUI:
           parent=self.root,
       )
       return
-    # Invocación directa a la vista encapsulada
     VisualizadorAVL(self.root, self.escenario.arbol_avl)
 
   # ------------------------------------------------------------------
-  # FORMULARIO / VENTANA MODAL PARA CREAR ZONA
+  # FORMULARIO: ZONA
   # ------------------------------------------------------------------
   def _abrir_formulario_zona(self):
-    ventana_zona = tk.Toplevel(self.root)
-    ventana_zona.title("Crear Nueva Zona")
-    ventana_zona.geometry("320x350")
-    ventana_zona.resizable(False, False)
-    ventana_zona.grab_set()
+    win, frame = self._crear_formulario("Crear Zona", "280x260")
 
-    ttk.Label(ventana_zona, text="Nombre de la Zona:").pack(
-        anchor="w", padx=20, pady=(15, 2)
-    )
-    entry_nombre = ttk.Entry(ventana_zona)
-    entry_nombre.pack(fill="x", padx=20)
+    campos = ["Nombre:", "X Mín:", "X Máx:", "Y Mín:", "Y Máx:"]
+    entries = {}
 
-    frame_x = ttk.Frame(ventana_zona)
-    frame_x.pack(fill="x", padx=20, pady=5)
-    ttk.Label(frame_x, text="X Mín (0-1000):").grid(row=0, column=0, sticky="w")
-    entry_x_min = ttk.Entry(frame_x, width=10)
-    entry_x_min.grid(row=0, column=1, padx=5)
-
-    ttk.Label(frame_x, text="X Máx (0-1000):").grid(
-        row=1, column=0, sticky="w", pady=5
-    )
-    entry_x_max = ttk.Entry(frame_x, width=10)
-    entry_x_max.grid(row=1, column=1, padx=5, pady=5)
-
-    frame_y = ttk.Frame(ventana_zona)
-    frame_y.pack(fill="x", padx=20, pady=5)
-    ttk.Label(frame_y, text="Y Mín (0-1000):").grid(row=0, column=0, sticky="w")
-    entry_y_min = ttk.Entry(frame_y, width=10)
-    entry_y_min.grid(row=0, column=1, padx=5)
-
-    ttk.Label(frame_y, text="Y Máx (0-1000):").grid(
-        row=1, column=0, sticky="w", pady=5
-    )
-    entry_y_max = ttk.Entry(frame_y, width=10)
-    entry_y_max.grid(row=1, column=1, padx=5, pady=5)
+    for i, label in enumerate(campos):
+      ttk.Label(frame, text=label).grid(row=i, column=0, sticky="w", pady=2)
+      e = ttk.Entry(frame)
+      e.grid(row=i, column=1, pady=2)
+      entries[label] = e
 
     var_poblada = tk.BooleanVar(value=False)
-    check_poblada = ttk.Checkbutton(
-        ventana_zona, text="¿Es Zona Poblada?", variable=var_poblada
-    )
-    check_poblada.pack(anchor="w", padx=20, pady=10)
+    ttk.Checkbutton(
+        frame, text="¿Zona Poblada?", variable=var_poblada
+    ).grid(row=5, columnspan=2, pady=5)
 
-    def guardar_zona():
-      nombre = entry_nombre.get().strip()
-
+    def guardar():
+      nombre = entries["Nombre:"].get().strip()
       if not nombre:
         messagebox.showerror(
-            "Error de Validación",
-            "El nombre de la zona no puede estar vacío.",
-            parent=ventana_zona,
+            "Error", "El nombre no puede estar vacío.", parent=win
         )
         return
 
-      for z in self.escenario.zonas:
-        if z.nombre.lower() == nombre.lower():
-          messagebox.showerror(
-              "Error de Validación",
-              f"Ya existe una zona con el nombre '{nombre}'.",
-              parent=ventana_zona,
-          )
-          return
+      if any(
+          z.nombre.lower() == nombre.lower() for z in self.escenario.zonas
+      ):
+        messagebox.showerror(
+            "Error", f"Ya existe la zona '{nombre}'.", parent=win
+        )
+        return
 
       try:
-        x_min = float(entry_x_min.get())
-        x_max = float(entry_x_max.get())
-        y_min = float(entry_y_min.get())
-        y_max = float(entry_y_max.get())
+        x_min = float(entries["X Mín:"].get())
+        x_max = float(entries["X Máx:"].get())
+        y_min = float(entries["Y Mín:"].get())
+        y_max = float(entries["Y Máx:"].get())
       except ValueError:
         messagebox.showerror(
-            "Error de Validación",
-            "Las coordenadas deben ser números válidos.",
-            parent=ventana_zona,
+            "Error", "Las coordenadas deben ser números válidos.", parent=win
         )
         return
 
-      if not (0 <= x_min <= 1000 and 0 <= x_max <= 1000):
+      if not (
+          0 <= x_min <= 1000
+          and 0 <= x_max <= 1000
+          and 0 <= y_min <= 1000
+          and 0 <= y_max <= 1000
+      ):
         messagebox.showerror(
-            "Error de Rangos",
-            "Las coordenadas X deben estar entre 0 y 1000 km.",
-            parent=ventana_zona,
-        )
-        return
-
-      if not (0 <= y_min <= 1000 and 0 <= y_max <= 1000):
-        messagebox.showerror(
-            "Error de Rangos",
-            "Las coordenadas Y deben estar entre 0 y 1000 km.",
-            parent=ventana_zona,
+            "Error", "Las coordenadas deben estar entre 0 y 1000.", parent=win
         )
         return
 
       if x_min >= x_max or y_min >= y_max:
         messagebox.showerror(
-            "Error de Geometría",
-            "Los valores mínimos deben ser menores que los máximos.",
-            parent=ventana_zona,
+            "Error", "Mínimos deben ser menores que máximos.", parent=win
         )
         return
 
-      nueva_zona = Zona(
-          nombre=nombre,
-          x_min=x_min,
-          x_max=x_max,
-          y_min=y_min,
-          y_max=y_max,
-          poblada=var_poblada.get(),
+      self.escenario.zonas.append(
+          Zona(nombre, x_min, x_max, y_min, y_max, var_poblada.get())
       )
-      self.escenario.zonas.append(nueva_zona)
-
       messagebox.showinfo(
-          "Éxito",
-          f"Zona '{nombre}' guardada con éxito en el escenario.",
-          parent=ventana_zona,
+          "Éxito", f"Zona '{nombre}' guardada con éxito.", parent=win
       )
-      ventana_zona.destroy()
+      win.destroy()
 
-    btn_guardar = ttk.Button(
-        ventana_zona, text="Guardar Zona", command=guardar_zona
+    ttk.Button(frame, text="Guardar", command=guardar).grid(
+        row=6, columnspan=2, pady=10
     )
-    btn_guardar.pack(pady=15)
 
   # ------------------------------------------------------------------
-  # FORMULARIO / VENTANA MODAL PARA CREAR ESTACIÓN
+  # FORMULARIO: ESTACIÓN
   # ------------------------------------------------------------------
   def _abrir_formulario_estacion(self):
     if not self.escenario.zonas:
       messagebox.showwarning(
-          "Atención",
-          "No hay zonas registradas en el escenario.\nDebes crear al menos"
-          " una zona primero.",
+          "Atención", "Cree al menos una zona antes de continuar."
       )
       return
 
-    ventana_est = tk.Toplevel(self.root)
-    ventana_est.title("Crear Nueva Estación")
-    ventana_est.geometry("340x360")
-    ventana_est.resizable(False, False)
-    ventana_est.grab_set()
+    win, frame = self._crear_formulario("Crear Estación", "280x220")
 
-    frame_info = ttk.Frame(ventana_est)
-    frame_info.pack(fill="x", padx=20, pady=(15, 5))
+    ttk.Label(frame, text="ID Estación:").grid(row=0, column=0, sticky="w")
+    entry_id = ttk.Entry(frame)
+    entry_id.grid(row=0, column=1, pady=2)
 
-    ttk.Label(frame_info, text="ID Estación:").grid(
-        row=0, column=0, sticky="w", pady=5
-    )
-    entry_id = ttk.Entry(frame_info, width=18)
-    entry_id.grid(row=0, column=1, padx=5, pady=5)
+    ttk.Label(frame, text="Nombre:").grid(row=1, column=0, sticky="w")
+    entry_nombre = ttk.Entry(frame)
+    entry_nombre.grid(row=1, column=1, pady=2)
 
-    ttk.Label(frame_info, text="Nombre:").grid(
-        row=1, column=0, sticky="w", pady=5
-    )
-    entry_nombre = ttk.Entry(frame_info, width=18)
-    entry_nombre.grid(row=1, column=1, padx=5, pady=5)
-
-    ttk.Label(frame_info, text="Zona:").grid(
-        row=2, column=0, sticky="w", pady=5
-    )
+    ttk.Label(frame, text="Zona:").grid(row=2, column=0, sticky="w")
     zonas_dict = {z.nombre: z for z in self.escenario.zonas}
     combo_zona = ttk.Combobox(
-        frame_info,
-        values=list(zonas_dict.keys()),
-        state="readonly",
-        width=16,
+        frame, values=list(zonas_dict.keys()), state="readonly"
     )
-    combo_zona.grid(row=2, column=1, padx=5, pady=5)
+    combo_zona.grid(row=2, column=1, pady=2)
     combo_zona.current(0)
 
-    frame_coords = ttk.Frame(ventana_est)
-    frame_coords.pack(fill="x", padx=20, pady=5)
+    ttk.Label(frame, text="Coord X:").grid(row=3, column=0, sticky="w")
+    entry_x = ttk.Entry(frame)
+    entry_x.grid(row=3, column=1, pady=2)
 
-    ttk.Label(frame_coords, text="Coordenada X (0-1000):").grid(
-        row=0, column=0, sticky="w", pady=5
-    )
-    entry_x = ttk.Entry(frame_coords, width=10)
-    entry_x.grid(row=0, column=1, padx=5, pady=5)
+    ttk.Label(frame, text="Coord Y:").grid(row=4, column=0, sticky="w")
+    entry_y = ttk.Entry(frame)
+    entry_y.grid(row=4, column=1, pady=2)
 
-    ttk.Label(frame_coords, text="Coordenada Y (0-1000):").grid(
-        row=1, column=0, sticky="w", pady=5
-    )
-    entry_y = ttk.Entry(frame_coords, width=10)
-    entry_y.grid(row=1, column=1, padx=5, pady=5)
+    def guardar():
+      id_est = entry_id.get().strip()
+      nom = entry_nombre.get().strip()
 
-    def guardar_estacion():
-      id_estacion = entry_id.get().strip()
-      nombre = entry_nombre.get().strip()
-      nombre_zona = combo_zona.get()
-
-      if not id_estacion or not nombre:
+      if not id_est or not nom:
         messagebox.showerror(
-            "Error de Validación",
-            "El ID y el Nombre de la estación son obligatorios.",
-            parent=ventana_est,
+            "Error", "El ID y Nombre son obligatorios.", parent=win
         )
         return
 
-      for e in self.escenario.estaciones:
-        if e.id_estacion.lower() == id_estacion.lower():
-          messagebox.showerror(
-              "Error de Validación",
-              f"Ya existe una estación con el ID '{id_estacion}'.",
-              parent=ventana_est,
-          )
-          return
+      if any(
+          e.id_estacion.lower() == id_est.lower()
+          for e in self.escenario.estaciones
+      ):
+        messagebox.showerror(
+            "Error", f"Ya existe la estación ID '{id_est}'.", parent=win
+        )
+        return
 
       try:
-        x = float(entry_x.get())
-        y = float(entry_y.get())
+        x, y = float(entry_x.get()), float(entry_y.get())
       except ValueError:
         messagebox.showerror(
-            "Error de Validación",
-            "Las coordenadas X e Y deben ser números válidos.",
-            parent=ventana_est,
+            "Error", "Las coordenadas deben ser números válidos.", parent=win
         )
         return
 
       if not (0 <= x <= 1000 and 0 <= y <= 1000):
         messagebox.showerror(
-            "Error de Rangos",
-            "Las coordenadas (X, Y) deben estar entre 0 y 1000 km.",
-            parent=ventana_est,
+            "Error", "Coordenadas fuera de rango (0-1000).", parent=win
         )
         return
-
-      zona_seleccionada = zonas_dict[nombre_zona]
 
       try:
         nueva_estacion = Estacion(
-            id_estacion=id_estacion,
-            nombre=nombre,
+            id_estacion=id_est,
+            nombre=nom,
             x=x,
             y=y,
-            zona=zona_seleccionada,
+            zona=zonas_dict[combo_zona.get()],
         )
       except ValueError as err:
-        messagebox.showerror("Error de Ubicación", str(err), parent=ventana_est)
+        messagebox.showerror("Error", str(err), parent=win)
         return
 
       self.escenario.estaciones.append(nueva_estacion)
+      messagebox.showinfo("Éxito", "Estación creada con éxito.", parent=win)
+      win.destroy()
 
-      tipo_zona = "Poblada" if nueva_estacion.es_poblada else "No Poblada"
-      messagebox.showinfo(
-          "Éxito",
-          f"Estación '{nombre}' (ID: {id_estacion}) registrada con éxito.\n"
-          f"Asignada a la zona: '{zona_seleccionada.nombre}' ({tipo_zona}).",
-          parent=ventana_est,
-      )
-      ventana_est.destroy()
-
-    btn_guardar = ttk.Button(
-        ventana_est, text="Verificar y Guardar", command=guardar_estacion
+    ttk.Button(frame, text="Guardar", command=guardar).grid(
+        row=5, columnspan=2, pady=10
     )
-    btn_guardar.pack(pady=15)
 
   # ------------------------------------------------------------------
-  # FORMULARIO / VENTANA MODAL PARA CREAR EPICENTRO
+  # FORMULARIO: EPICENTRO
   # ------------------------------------------------------------------
   def _abrir_formulario_epicentro(self):
     if not self.escenario.zonas:
       messagebox.showwarning(
-          "Atención",
-          "No hay zonas registradas en el escenario.\nDebes crear al menos"
-          " una zona primero.",
+          "Atención", "Cree al menos una zona antes de continuar."
       )
       return
 
-    ventana_epi = tk.Toplevel(self.root)
-    ventana_epi.title("Crear Nuevo Epicentro")
-    ventana_epi.geometry("300x220")
-    ventana_epi.resizable(False, False)
-    ventana_epi.grab_set()
+    win, frame = self._crear_formulario("Crear Epicentro", "250x150")
 
-    frame_coords = ttk.Frame(ventana_epi)
-    frame_coords.pack(fill="x", padx=20, pady=20)
+    ttk.Label(frame, text="Coord X:").grid(row=0, column=0, sticky="w")
+    entry_x = ttk.Entry(frame)
+    entry_x.grid(row=0, column=1, pady=2)
 
-    ttk.Label(frame_coords, text="Coordenada X (0-1000):").grid(
-        row=0, column=0, sticky="w", pady=5
-    )
-    entry_x = ttk.Entry(frame_coords, width=10)
-    entry_x.grid(row=0, column=1, padx=5, pady=5)
+    ttk.Label(frame, text="Coord Y:").grid(row=1, column=0, sticky="w")
+    entry_y = ttk.Entry(frame)
+    entry_y.grid(row=1, column=1, pady=2)
 
-    ttk.Label(frame_coords, text="Coordenada Y (0-1000):").grid(
-        row=1, column=0, sticky="w", pady=5
-    )
-    entry_y = ttk.Entry(frame_coords, width=10)
-    entry_y.grid(row=1, column=1, padx=5, pady=5)
-
-    def guardar_epicentro():
+    def guardar():
       try:
-        x = float(entry_x.get())
-        y = float(entry_y.get())
+        x, y = float(entry_x.get()), float(entry_y.get())
       except ValueError:
-        messagebox.showerror(
-            "Error de Validación",
-            "Las coordenadas deben ser números válidos.",
-            parent=ventana_epi,
-        )
+        messagebox.showerror("Error", "Coordenadas no válidas.", parent=win)
         return
 
       if not (0 <= x <= 1000 and 0 <= y <= 1000):
         messagebox.showerror(
-            "Error de Rangos",
-            "Las coordenadas (X, Y) deben estar entre 0 y 1000 km.",
-            parent=ventana_epi,
+            "Error", "Coordenadas fuera de rango (0-1000).", parent=win
         )
         return
 
-      nuevo_epicentro = Epicentro(
-          x=x, y=y, zonas_escenario=self.escenario.zonas
-      )
-
-      if nuevo_epicentro.zona is None:
+      nuevo_epi = Epicentro(x=x, y=y, zonas_escenario=self.escenario.zonas)
+      if nuevo_epi.zona is None:
         messagebox.showerror(
-            "Error de Pertenece a Zona",
-            f"El punto ({nuevo_epicentro.x}, {nuevo_epicentro.y}) no pertenece"
-            " a ninguna zona registrada en el escenario.",
-            parent=ventana_epi,
+            "Error",
+            f"El punto ({x}, {y}) no pertenece a ninguna zona.",
+            parent=win,
         )
         return
 
-      self.escenario.epicentros.append(nuevo_epicentro)
-
-      tipo_zona = "Poblada" if nuevo_epicentro.es_poblada else "No Poblada"
+      self.escenario.epicentros.append(nuevo_epi)
       messagebox.showinfo(
-          "Éxito",
-          f"Epicentro en ({nuevo_epicentro.x}, {nuevo_epicentro.y}) verificado"
-          " correctamente.\nPertenece a la zona:"
-          f" '{nuevo_epicentro.zona.nombre}' ({tipo_zona})",
-          parent=ventana_epi,
+          "Éxito", f"Epicentro creado en zona '{nuevo_epi.zona.nombre}'.", parent=win
       )
-      ventana_epi.destroy()
+      win.destroy()
 
-    btn_guardar = ttk.Button(
-        ventana_epi, text="Verificar y Crear", command=guardar_epicentro
+    ttk.Button(frame, text="Guardar", command=guardar).grid(
+        row=2, columnspan=2, pady=10
     )
-    btn_guardar.pack(pady=10)
 
   # ------------------------------------------------------------------
-  # FORMULARIO / VENTANA MODAL PARA CREAR EVENTO
+  # FORMULARIO: EVENTO
   # ------------------------------------------------------------------
   def _abrir_formulario_evento(self):
-    if not self.escenario.epicentros:
+    if not self.escenario.epicentros or not self.escenario.estaciones:
       messagebox.showwarning(
-          "Atención",
-          "No hay epicentros registrados.\nDebes crear al menos un epicentro"
-          " antes de registrar un evento.",
+          "Atención", "Requiere al menos 1 Epicentro y 1 Estación creados."
       )
       return
 
-    if not self.escenario.estaciones:
-      messagebox.showwarning(
-          "Atención",
-          "No hay estaciones registradas.\nDebes crear al menos una estación"
-          " de origen antes de registrar un evento.",
-      )
-      return
+    win, frame = self._crear_formulario("Crear Evento", "320x250")
 
-    ventana_evt = tk.Toplevel(self.root)
-    ventana_evt.title("Crear Nuevo Evento Sísmico")
-    ventana_evt.geometry("380x380")
-    ventana_evt.resizable(False, False)
-    ventana_evt.grab_set()
+    campos = [
+        "ID Evento:",
+        "Magnitud:",
+        "Profundidad:",
+        "Epicentro:",
+        "Estación:",
+        "Fecha/Hora:",
+    ]
+    entries = {}
 
-    frame_campos = ttk.Frame(ventana_evt)
-    frame_campos.pack(fill="x", padx=20, pady=15)
-
-    # ID Evento
-    ttk.Label(frame_campos, text="ID Evento (1 - 999999):").grid(
-        row=0, column=0, sticky="w", pady=5
-    )
-    entry_id = ttk.Entry(frame_campos, width=18)
-    entry_id.grid(row=0, column=1, padx=5, pady=5)
-
-    # Magnitud
-    ttk.Label(frame_campos, text="Magnitud (-2.0 a 10.0):").grid(
-        row=1, column=0, sticky="w", pady=5
-    )
-    entry_mag = ttk.Entry(frame_campos, width=18)
-    entry_mag.grid(row=1, column=1, padx=5, pady=5)
-
-    # Profundidad
-    ttk.Label(frame_campos, text="Profundidad (0 - 700 km):").grid(
-        row=2, column=0, sticky="w", pady=5
-    )
-    entry_prof = ttk.Entry(frame_campos, width=18)
-    entry_prof.grid(row=2, column=1, padx=5, pady=5)
-
-    # Selector de Epicentro
-    ttk.Label(frame_campos, text="Epicentro:").grid(
-        row=3, column=0, sticky="w", pady=5
-    )
     epicentros_dict = {
-        f"({epi.x}, {epi.y}) - {epi.zona.nombre if epi.zona else 'Sin Zona'}": (
-            epi
-        )
-        for epi in self.escenario.epicentros
+        f"({epi.x}, {epi.y})": epi for epi in self.escenario.epicentros
     }
-    combo_epicentro = ttk.Combobox(
-        frame_campos,
-        values=list(epicentros_dict.keys()),
-        state="readonly",
-        width=22,
-    )
-    combo_epicentro.grid(row=3, column=1, padx=5, pady=5)
-    combo_epicentro.current(0)
-
-    # Selector de Estación Origen
-    ttk.Label(frame_campos, text="Estación Origen:").grid(
-        row=4, column=0, sticky="w", pady=5
-    )
     estaciones_dict = {
         f"{est.id_estacion} - {est.nombre}": est
         for est in self.escenario.estaciones
     }
-    combo_estacion = ttk.Combobox(
-        frame_campos,
-        values=list(estaciones_dict.keys()),
-        state="readonly",
-        width=22,
-    )
-    combo_estacion.grid(row=4, column=1, padx=5, pady=5)
-    combo_estacion.current(0)
 
-    # Fecha/Hora Opcional
-    ttk.Label(
-        frame_campos, text="Fecha/Hora (ISO):", font=("Arial", 9, "italic")
-    ).grid(row=5, column=0, sticky="w", pady=5)
-    entry_fecha = ttk.Entry(frame_campos, width=18)
-    entry_fecha.grid(row=5, column=1, padx=5, pady=5)
+    for i, label in enumerate(campos):
+      ttk.Label(frame, text=label).grid(row=i, column=0, sticky="w", pady=2)
 
-    def guardar_evento():
+      if label == "Epicentro:":
+        e = ttk.Combobox(
+            frame, values=list(epicentros_dict.keys()), state="readonly"
+        )
+        e.current(0)
+      elif label == "Estación:":
+        e = ttk.Combobox(
+            frame, values=list(estaciones_dict.keys()), state="readonly"
+        )
+        e.current(0)
+      else:
+        e = ttk.Entry(frame)
+
+      e.grid(row=i, column=1, pady=2)
+      entries[label] = e
+
+    def guardar():
       try:
-        id_evento = int(entry_id.get().strip())
-        if not (1 <= id_evento <= 999999):
+        id_evt = int(entries["ID Evento:"].get().strip())
+        if not (1 <= id_evt <= 999999):
           raise ValueError()
       except ValueError:
         messagebox.showerror(
-            "Error de Validación",
-            "El ID del evento debe ser un número entero entre 1 y 999999.",
-            parent=ventana_evt,
+            "Error", "ID debe ser entero entre 1 y 999999.", parent=win
         )
         return
 
-      # Validación rápida O(1) con dict_eventos
-      if id_evento in self.escenario.dict_eventos:
+      if id_evt in self.escenario.dict_eventos:
         messagebox.showerror(
-            "Error de Validación",
-            f"Ya existe un evento registrado con el ID '{id_evento}'.",
-            parent=ventana_evt,
+            "Error", f"El ID '{id_evt}' ya existe.", parent=win
         )
         return
 
       try:
-        magnitud = float(entry_mag.get().strip())
-        profundidad = float(entry_prof.get().strip())
+        mag = float(entries["Magnitud:"].get().strip())
+        prof = float(entries["Profundidad:"].get().strip())
       except ValueError:
         messagebox.showerror(
-            "Error de Validación",
-            "La magnitud y la profundidad deben ser números válidos.",
-            parent=ventana_evt,
+            "Error", "Magnitud y Profundidad deben ser números.", parent=win
         )
         return
 
-      if not (-2.0 <= magnitud <= 10.0):
+      if not (-2.0 <= mag <= 10.0) or not (0.0 <= prof <= 700.0):
         messagebox.showerror(
-            "Error de Rango",
-            "La magnitud debe estar entre -2.0 y 10.0.",
-            parent=ventana_evt,
+            "Error", "Magnitud (-2 a 10) o Profundidad (0 a 700) fuera de rango.", parent=win
         )
         return
 
-      if not (0.0 <= profundidad <= 700.0):
-        messagebox.showerror(
-            "Error de Rango",
-            "La profundidad debe estar entre 0.0 y 700.0 km.",
-            parent=ventana_evt,
-        )
-        return
-
-      epicentro_sel = epicentros_dict[combo_epicentro.get()]
-      estacion_sel = estaciones_dict[combo_estacion.get()]
-      fecha_txt = entry_fecha.get().strip() or None
-
-      # Instanciar Evento
       nuevo_evento = Evento(
-          id_evento=id_evento,
-          magnitud=magnitud,
-          profundidad=profundidad,
-          epicentro=epicentro_sel,
-          estacion_origen=estacion_sel,
-          fecha_hora=fecha_txt,
+          id_evento=id_evt,
+          magnitud=mag,
+          profundidad=prof,
+          epicentro=epicentros_dict[entries["Epicentro:"].get()],
+          estacion_origen=estaciones_dict[entries["Estación:"].get()],
+          fecha_hora=entries["Fecha/Hora:"].get().strip() or None,
       )
 
-      # 1. Guardar en el diccionario de eventos O(1)
-      self.escenario.dict_eventos[id_evento] = nuevo_evento
-
-      # 2. Guardar en la lista histórica
+      # Actualización de estructuras
+      self.escenario.dict_eventos[id_evt] = nuevo_evento
       self.escenario.historico.append(nuevo_evento)
 
-      # 3. Encapsular en un Nodo e insertar en el árbol AVL
-      nuevo_nodo = Nodo(evento=nuevo_evento)
       if getattr(self.escenario, "arbol_avl", None) is not None:
-        self.escenario.arbol_avl.insertar(nuevo_nodo)
+        self.escenario.arbol_avl.insertar(Nodo(evento=nuevo_evento))
 
       messagebox.showinfo(
-          "Éxito",
-          f"Evento SIS-{nuevo_evento.id:06d} registrado con éxito.\n\n"
-          f"• Guardado en dict_eventos[{id_evento}]\n"
-          f"• Prioridad: {nuevo_evento.prioridad}\n"
-          f"• Clave (P, M, ID): {nuevo_evento.clave}\n"
-          f"• Estación origen: {estacion_sel.id_estacion}",
-          parent=ventana_evt,
+          "Éxito", f"Evento SIS-{nuevo_evento.id:06d} registrado.", parent=win
       )
-      ventana_evt.destroy()
+      win.destroy()
 
-    btn_guardar = ttk.Button(
-        ventana_evt, text="Guardar Evento", command=guardar_evento
+    ttk.Button(frame, text="Guardar Evento", command=guardar).grid(
+        row=6, columnspan=2, pady=10
     )
-    btn_guardar.pack(pady=15)
