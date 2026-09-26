@@ -1,7 +1,7 @@
 from collections import deque
-from typing import Optional, List, Tuple, Dict
-from Modelos.Nodo import Nodo
+from typing import Dict, List, Optional, Tuple
 from Modelos.Evento import Evento
+from Modelos.Nodo import Nodo
 
 
 class AVL:
@@ -10,7 +10,6 @@ class AVL:
         self.raiz: Optional[Nodo] = None
         self.modo_estres: bool = modo_estres
 
-        # Contadores de métricas exigidos por el PDF
         self.conteo_rotaciones = {
             "LL": 0,
             "RR": 0,
@@ -19,6 +18,29 @@ class AVL:
             "giros_simples": 0,
         }
 
+ 
+    def actualizar_profundidades(self, limite_L: int) -> None:
+
+        self._recorrer_y_actualizar_profundidades(self.raiz, 0, limite_L)
+
+    def _recorrer_y_actualizar_profundidades(
+        self, nodo: Optional[Nodo], prof_actual: int, limite_L: int
+    ) -> None:
+        if nodo is None:
+            return
+
+        # 1. Asigna profundidad al nodo e invoca la evaluación en el Evento
+        nodo.actualizar_profundidad_y_costo(prof_actual, limite_L)
+
+        # 2. Los hijos directos reciben la profundidad de su nivel + 1
+        self._recorrer_y_actualizar_profundidades(
+            nodo.izquierda, prof_actual + 1, limite_L
+        )
+        self._recorrer_y_actualizar_profundidades(
+            nodo.derecha, prof_actual + 1, limite_L
+        )
+
+ 
     def _obtener_altura(self, nodo: Optional[Nodo]) -> int:
         if nodo is None:
             return 0
@@ -59,20 +81,27 @@ class AVL:
 
         self.conteo_rotaciones["giros_simples"] += 1
         return y
-    
-    def insertar(self, nodo: Nodo) -> None:
-        """Recibe una instancia de Nodo ya creada y la inserta en el árbol."""
-        self.raiz = self._insertar(self.raiz, nodo)
 
-    def _insertar(self, nodo_actual: Optional[Nodo], nuevo_nodo: Nodo) -> Nodo:
+  
+    def insertar(self, nodo: Nodo, limite_L: int) -> None:
+  
+        self.raiz = self._insertar(self.raiz, nodo)
+        self.actualizar_profundidades(limite_L)
+
+    def _insertar(
+        self, nodo_actual: Optional[Nodo], nuevo_nodo: Nodo
+    ) -> Nodo:
         if nodo_actual is None:
             return nuevo_nodo
 
-        # Comparación lexicográfica utilizando la tupla clave = (P, M, I)
         if nuevo_nodo.clave < nodo_actual.clave:
-            nodo_actual.izquierda = self._insertar(nodo_actual.izquierda, nuevo_nodo)
+            nodo_actual.izquierda = self._insertar(
+                nodo_actual.izquierda, nuevo_nodo
+            )
         elif nuevo_nodo.clave > nodo_actual.clave:
-            nodo_actual.derecha = self._insertar(nodo_actual.derecha, nuevo_nodo)
+            nodo_actual.derecha = self._insertar(
+                nodo_actual.derecha, nuevo_nodo
+            )
         else:
             # Clave duplicada
             return nodo_actual
@@ -95,7 +124,9 @@ class AVL:
 
         if balance > 1 and nuevo_nodo.clave > nodo_actual.izquierda.clave:
             self.conteo_rotaciones["LR"] += 1
-            nodo_actual.izquierda = self._rotacion_izquierda(nodo_actual.izquierda)
+            nodo_actual.izquierda = self._rotacion_izquierda(
+                nodo_actual.izquierda
+            )
             return self._rotacion_derecha(nodo_actual)
 
         if balance < -1 and nuevo_nodo.clave < nodo_actual.derecha.clave:
@@ -104,7 +135,81 @@ class AVL:
             return self._rotacion_izquierda(nodo_actual)
 
         return nodo_actual
-    
+
+    # =========================================================================
+    # ELIMINACIÓN
+    # =========================================================================
+    def eliminar(self, clave: Tuple[int, float, int], limite_L: int) -> None:
+        """Punto de entrada público para eliminar por la tupla clave (P, M,
+
+        I).
+        """
+        self.raiz = self._eliminar(self.raiz, clave)
+        self.actualizar_profundidades(limite_L)
+
+    def _eliminar(
+        self, raiz: Optional[Nodo], clave: Tuple[int, float, int]
+    ) -> Optional[Nodo]:
+        if raiz is None:
+            return None
+
+        # 1. Búsqueda recursiva
+        if clave < raiz.evento.clave:
+            raiz.izquierda = self._eliminar(raiz.izquierda, clave)
+        elif clave > raiz.evento.clave:
+            raiz.derecha = self._eliminar(raiz.derecha, clave)
+        else:
+            # 2. Caso encontrado
+            if raiz.es_hoja():
+                return None
+
+            if raiz.tiene_dos_hijos():
+                sucesor = self._buscar_minimo(raiz.derecha)
+                raiz.evento = sucesor.evento
+                raiz.clave = sucesor.evento.clave
+                raiz.derecha = self._eliminar(
+                    raiz.derecha, sucesor.evento.clave
+                )
+            elif raiz.tiene_hijo_izquierdo():
+                return raiz.izquierda
+            elif raiz.tiene_hijo_derecho():
+                return raiz.derecha
+
+        if raiz is None:
+            return None
+
+        # 3. Actualización de altura
+        self._actualizar_altura(raiz)
+
+        if self.modo_estres:
+            return raiz
+
+        # 4. Rebalanceo
+        balance = self._factor_balance(raiz)
+
+        if balance > 1 and self._factor_balance(raiz.izquierda) >= 0:
+            self.conteo_rotaciones["LL"] += 1
+            return self._rotacion_derecha(raiz)
+
+        if balance > 1 and self._factor_balance(raiz.izquierda) < 0:
+            self.conteo_rotaciones["LR"] += 1
+            raiz.izquierda = self._rotacion_izquierda(raiz.izquierda)
+            return self._rotacion_derecha(raiz)
+
+        if balance < -1 and self._factor_balance(raiz.derecha) <= 0:
+            self.conteo_rotaciones["RR"] += 1
+            return self._rotacion_izquierda(raiz)
+
+        if balance < -1 and self._factor_balance(raiz.derecha) > 0:
+            self.conteo_rotaciones["RL"] += 1
+            raiz.derecha = self._rotacion_derecha(raiz.derecha)
+            return self._rotacion_izquierda(raiz)
+
+        return raiz
+
+    # =========================================================================
+    # MODO ESTRÉS Y RECUPERACIÓN
+    # =========================================================================
     def _esta_desbalanceado(self, nodo: Optional[Nodo]) -> bool:
         if nodo is None:
             return False
@@ -122,14 +227,12 @@ class AVL:
         if nodo is None:
             return None
 
-        # Rebalancear subárboles primero (post-orden)
         nodo.izquierda = self._recuperar_equilibrio_nodo(nodo.izquierda)
         nodo.derecha = self._recuperar_equilibrio_nodo(nodo.derecha)
 
         self._actualizar_altura(nodo)
         balance = self._factor_balance(nodo)
 
-        # Si hay desbalance, aplicamos las rotaciones requeridas
         if balance > 1:
             if self._factor_balance(nodo.izquierda) < 0:
                 self.conteo_rotaciones["LR"] += 1
@@ -148,8 +251,11 @@ class AVL:
 
         return nodo
 
-    def recuperar_equilibrio(self) -> None:
-        """Aplica rotaciones a un árbol degradado en modo estrés hasta cumplir la propiedad AVL."""
+    def recuperar_equilibrio(self, limite_L: int) -> None:
+        """Rebalancea el árbol tras salir del modo estrés y recalcula las
+
+        profundidades.
+        """
         mientras_desbalanceado = True
 
         while mientras_desbalanceado:
@@ -157,143 +263,15 @@ class AVL:
             mientras_desbalanceado = self._esta_desbalanceado(self.raiz)
 
         self.modo_estres = False
-        
-    def mostrar_arbol_consola(self) -> None:
-        """Muestra el árbol de forma horizontal/espaciada.
+        self.actualizar_profundidades(limite_L)
 
-        Arriba: Subárbol Derecho (Valores mayores)
-        Centro: Raíz / Nodo actual
-        Abajo: Subárbol Izquierdo (Valores menores)
-        """
-        if self.raiz is None:
-            print("\n[ ÁRBOL AVL VACÍO ]\n")
-            return
-
-        print("\n" + "=" * 60)
-        self._imprimir_nodo_espaciado(self.raiz, nivel=0)
-        print("=" * 60 + "\n")
-
-    def _imprimir_nodo_espaciado(
-        self, nodo: Optional[Nodo], nivel: int
-    ) -> None:
-        if nodo is None:
-            return
-
-        # 1. Procesar primero el hijo DERECHO (se imprime arriba)
-        self._imprimir_nodo_espaciado(nodo.derecha, nivel + 1)
-
-        # 2. Imprimir el NODO ACTUAL con sangría según su nivel de profundidad
-        espacios = "        " * nivel  # 9 espacios por nivel
-        
-        # Formato claro del nodo
-        info = f"[ID:{nodo.evento.id} | K={nodo.clave} | H:{nodo.altura}]"
-
-        if nivel == 0:
-            print(f"RAÍZ ──> {info}")
-        else:
-            print(f"{espacios}└── {info}")
-
-        # Separador vertical suave para dar más aire entre ramas
-        print(f"{espacios}    │")
-
-        # 3. Procesar el hijo IZQUIERDO (se imprime abajo)
-        self._imprimir_nodo_espaciado(nodo.izquierda, nivel + 1)
-        
-        
-    def _buscar_minimo(self, raiz: Nodo) -> Nodo:
-            actual = raiz
-            while actual.tiene_hijo_izquierdo():
-                actual = actual.izquierda
-            return actual
-        
-    def eliminar(self, clave: Tuple[int, float, int]) -> None:
-        """Punto de entrada público para eliminar por la tupla clave (P, M, I)."""
-        self.raiz = self._eliminar(self.raiz, clave)
-
-    def _eliminar(
-        self,
-        raiz: Optional[Nodo],
-        clave: Tuple[int, float, int]
-    ) -> Optional[Nodo]:
-
-        if raiz is None:
-            return None
-
-        # 1. BÚSQUEDA RECURSIVA POR CLAVE (P, M, I)
-        if clave < raiz.evento.clave:
-            raiz.izquierda = self._eliminar(raiz.izquierda, clave)
-
-        elif clave > raiz.evento.clave:
-            raiz.derecha = self._eliminar(raiz.derecha, clave)
-
-        else:
-            # 2. CASO ENCONTRADO: EVALUACIÓN DE CASOS DE ELIMINACIÓN
-
-            # Caso 1: Nodo Hoja (sin hijos)
-            if raiz.es_hoja():
-                return None
-
-            # Caso 2: Tiene dos hijos
-            if raiz.tiene_dos_hijos():
-                sucesor = self._buscar_minimo(raiz.derecha)
-                
-                # Reemplazamos la instancia del evento (su clave cambia automáticamente)
-                raiz.evento = sucesor.evento
-
-                # Eliminamos el sucesor de la rama derecha usando su clave
-                raiz.derecha = self._eliminar(raiz.derecha, sucesor.evento.clave)
-
-            # Caso 3: Solo tiene un hijo (Izquierdo)
-            elif raiz.tiene_hijo_izquierdo():
-                return raiz.izquierda
-
-            # Caso 4: Solo tiene un hijo (Derecho)
-            elif raiz.tiene_hijo_derecho():
-                return raiz.derecha
-
-        # Si el subárbol quedó vacío
-        if raiz is None:
-            return None
-
-        # 3. ACTUALIZACIÓN DE ALTURA
-        self._actualizar_altura(raiz)
-
-        # Si estamos en modo estrés, omitimos rebalanceo inmediato
-        if self.modo_estres:
-            return raiz
-
-        # 4. REBALANCEO AVL Y CONTEO DE ROTACIONES
-        balance = self._factor_balance(raiz)
-
-        # Caso LL
-        if balance > 1 and self._factor_balance(raiz.izquierda) >= 0:
-            self.conteo_rotaciones["LL"] += 1
-            return self._rotacion_derecha(raiz)
-
-        # Caso LR
-        if balance > 1 and self._factor_balance(raiz.izquierda) < 0:
-            self.conteo_rotaciones["LR"] += 1
-            raiz.izquierda = self._rotacion_izquierda(raiz.izquierda)
-            return self._rotacion_derecha(raiz)
-
-        # Caso RR
-        if balance < -1 and self._factor_balance(raiz.derecha) <= 0:
-            self.conteo_rotaciones["RR"] += 1
-            return self._rotacion_izquierda(raiz)
-
-        # Caso RL
-        if balance < -1 and self._factor_balance(raiz.derecha) > 0:
-            self.conteo_rotaciones["RL"] += 1
-            raiz.derecha = self._rotacion_derecha(raiz.derecha)
-            return self._rotacion_izquierda(raiz)
-
-        return raiz
-    
+  
     def buscar(self, clave: Tuple[int, float, int]) -> Optional[Nodo]:
-       #con la tupla clave
         return self._buscar(self.raiz, clave)
 
-    def _buscar(self, nodo: Optional[Nodo], clave: Tuple[int, float, int]) -> Optional[Nodo]:
+    def _buscar(
+        self, nodo: Optional[Nodo], clave: Tuple[int, float, int]
+    ) -> Optional[Nodo]:
         if nodo is None or nodo.clave == clave:
             return nodo
 
@@ -301,5 +279,9 @@ class AVL:
             return self._buscar(nodo.izquierda, clave)
 
         return self._buscar(nodo.derecha, clave)
-    
-   
+
+    def _buscar_minimo(self, raiz: Nodo) -> Nodo:
+        actual = raiz
+        while actual.tiene_hijo_izquierdo():
+            actual = actual.izquierda
+        return actual

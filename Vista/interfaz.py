@@ -401,7 +401,7 @@ class SismoLabGUI:
       self.escenario.historico.append(nuevo_evento)
 
       if getattr(self.escenario, "arbol_avl", None) is not None:
-        self.escenario.arbol_avl.insertar(Nodo(evento=nuevo_evento))
+        self.escenario.arbol_avl.insertar(Nodo(evento=nuevo_evento),self.escenario.L)
 
       messagebox.showinfo(
           "Éxito", f"Evento SIS-{nuevo_evento.id:06d} registrado.", parent=win

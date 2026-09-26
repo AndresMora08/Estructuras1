@@ -40,6 +40,8 @@ class Evento:
 
     # Calcula la prioridad e inserta la clave
     self.calcular_prioridad()
+    
+    self.acceso_costoso=False
 
   def actualizar_prioridad_y_clave(self, nueva_prioridad: int):
     self.prioridad = int(nueva_prioridad)
@@ -83,3 +85,10 @@ class Evento:
         "prioridad": self.prioridad,
         "clave": self.clave,
     }
+    
+  def evaluar_costo(self, profundidad_nodo: int, limite_L: int) -> None:
+  
+    if self.prioridad == 3 and profundidad_nodo > limite_L:
+        self.acceso_costoso = True
+    else:
+        self.acceso_costoso = False
