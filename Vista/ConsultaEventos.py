@@ -17,7 +17,7 @@ class ConsultaEventos:
     ):
         self.ventana = tk.Toplevel(root)
         self.ventana.title("Consulta de Eventos")
-        self.ventana.geometry("450x480")
+        self.ventana.geometry("520x500")
 
         self.eventos = eventos
         self.arbol_avl = arbol_avl
@@ -85,6 +85,14 @@ class ConsultaEventos:
         )
         self.btn_eliminar.pack(side=tk.LEFT, padx=5)
 
+        # Botón para Archivar Rama Antigua (de la rama seleccionada)
+        self.btn_archivar = ttk.Button(
+            f_botones,
+            text="Archivar Rama Antigua",
+            command=self._procesar_archivado_rama,
+        )
+        self.btn_archivar.pack(side=tk.LEFT, padx=5)
+
     def _procesar_busqueda(self):
         try:
             num_id = int(self.entry_id.get().strip())
@@ -151,6 +159,7 @@ class ConsultaEventos:
                 evento_viejo=self.evento_actual,
                 arbol_avl=self.arbol_avl,
                 dict_eventos=self.eventos,
+                escenario=self.escenario,  # <-- PASAR EL ESCENARIO AQUÍ
                 callback_refrescar=lambda: self._mostrar_evento(
                     self.evento_actual.id
                 ),
@@ -165,6 +174,53 @@ class ConsultaEventos:
                 dict_eventos=self.eventos,
                 escenario=self.escenario,
                 callback_al_eliminar=self._limpiar_pantalla,
+            )
+
+    def _procesar_archivado_rama(self):
+        if not self.escenario:
+            messagebox.showerror(
+                "Error", "No hay un escenario activo cargado.", parent=self.ventana
+            )
+            return
+
+        if not self.evento_actual:
+            messagebox.showwarning(
+                "Aviso",
+                "Por favor, busque primero el evento que será la raíz de la rama a archivar.",
+                parent=self.ventana,
+            )
+            return
+
+        id_objetivo = self.evento_actual.id
+
+        # Intentar el archivado de la rama elegible por ID
+        exito, justificacion, ids_afectados = self.escenario.archivar_evento_por_id(id_objetivo)
+
+        if not exito:
+            messagebox.showinfo("Información / No Elegible", justificacion, parent=self.ventana)
+            return
+
+        # Muestra la justificación, cantidad e identificadores antes de aplicar permanentemente
+        confirmar = messagebox.askyesno(
+            "Confirmación de Archivado de Rama",
+            f"{justificacion}\n\n¿Desea confirmar el archivado de este subárbol al histórico?",
+            parent=self.ventana,
+        )
+
+        if not confirmar:
+            # Deshacer con una única acción si el usuario no confirma
+            self.escenario.deshacer_ultimo_archivado()
+            messagebox.showinfo(
+                "Cancelado",
+                "Operación cancelada. El árbol conservó su estado original.",
+                parent=self.ventana,
+            )
+        else:
+            self._limpiar_pantalla()
+            messagebox.showinfo(
+                "Éxito",
+                f"Se archivaron correctamente {len(ids_afectados)} eventos y se trasladaron al histórico.",
+                parent=self.ventana,
             )
 
     def _limpiar_pantalla(self):

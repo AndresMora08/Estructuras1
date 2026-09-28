@@ -2,8 +2,9 @@ from collections import deque
 from typing import Dict, List, Optional, Tuple
 from Modelos.Evento import Evento
 from Modelos.Nodo import Nodo
-
-
+from datetime import datetime as Datetime
+from datetime import datetime
+from datetime import timezone
 class AVL:
 
     def __init__(self, modo_estres: bool = False):
@@ -146,7 +147,6 @@ class AVL:
         """
         self.raiz = self._eliminar(self.raiz, clave)
         self.actualizar_profundidades(limite_L)
-
     def _eliminar(
         self, raiz: Optional[Nodo], clave: Tuple[int, float, int]
     ) -> Optional[Nodo]:
@@ -165,8 +165,7 @@ class AVL:
 
             if raiz.tiene_dos_hijos():
                 sucesor = self._buscar_minimo(raiz.derecha)
-                raiz.evento = sucesor.evento
-                raiz.clave = sucesor.evento.clave
+                raiz.evento = sucesor.evento  # Copia el evento (la clave se actualiza automáticamente)
                 raiz.derecha = self._eliminar(
                     raiz.derecha, sucesor.evento.clave
                 )
@@ -206,7 +205,6 @@ class AVL:
             return self._rotacion_izquierda(raiz)
 
         return raiz
-
     # =========================================================================
     # MODO ESTRÉS Y RECUPERACIÓN
     # =========================================================================
@@ -285,3 +283,100 @@ class AVL:
         while actual.tiene_hijo_izquierdo():
             actual = actual.izquierda
         return actual
+    
+    def es_nodo_archivable(self, nodo, reloj, T_horas: float) -> bool:
+        """
+        Verifica recursivamente si el nodo y TODOS sus descendientes
+        tienen prioridad 1 (baja) y antigüedad estrictamente mayor a T_horas.
+        """
+        if nodo is None:
+            return True
+
+        # Parseo de fecha considerando zona horaria UTC
+        if isinstance(nodo.evento.fecha_hora, str):
+            fecha_ev = datetime.strptime(nodo.evento.fecha_hora, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        else:
+            fecha_ev = nodo.evento.fecha_hora
+            if fecha_ev.tzinfo is None:
+                fecha_ev = fecha_ev.replace(tzinfo=timezone.utc)
+
+        reloj_utc = reloj if getattr(reloj, "tzinfo", None) is not None else reloj.replace(tzinfo=timezone.utc)
+        
+        antiguedad_horas = (reloj_utc - fecha_ev).total_seconds() / 3600.0
+
+        # Prioridad baja (1) y antigüedad mayor a T
+        if nodo.evento.prioridad != 1 or antiguedad_horas <= T_horas:
+            return False
+
+        return self.es_nodo_archivable(nodo.izquierda, reloj, T_horas) and \
+               self.es_nodo_archivable(nodo.derecha, reloj, T_horas)
+
+    def buscar_nodo_y_profundidad(self, id_evento: int):
+        """
+        Localiza el nodo por su ID y retorna una tupla (nodo, profundidad_en_arbol).
+        """
+        def _buscar(nodo, prof_actual):
+            if nodo is None:
+                return None, 0
+            if nodo.evento.id == id_evento:
+                return nodo, prof_actual
+            
+            izq, p_izq = _buscar(nodo.izquierda, prof_actual + 1)
+            if izq:
+                return izq, p_izq
+            return _buscar(nodo.derecha, prof_actual + 1)
+
+        return _buscar(self.raiz, 0)
+
+    def obtener_subarbol_eventos(self, nodo):
+        """
+        Recolecta todos los eventos pertenecientes al subárbol con raíz en 'nodo'.
+        """
+        eventos = []
+        def _recolectar(n):
+            if n:
+                eventos.append(n.evento)
+                _recolectar(n.izquierda)
+                _recolectar(n.derecha)
+        _recolectar(nodo)
+        return eventos
+
+    def buscar_rama_elegible_optima(self, reloj, T_horas: float):
+        """
+        Evalúa todos los subárboles elegibles del AVL activo y selecciona el óptimo
+        según las reglas de desempate:
+          1. Mayor cantidad de nodos.
+          2. Mayor profundidad de la raíz del subárbol.
+          3. Mayor ID numérico de la raíz.
+        """
+        candidatos = []
+
+        def _evaluar(nodo, prof_actual=0):
+            if nodo is None:
+                return
+
+            if self.es_nodo_archivable(nodo, reloj, T_horas):
+                eventos_subarbol = self.obtener_subarbol_eventos(nodo)
+                candidatos.append({
+                    "nodo_raiz": nodo,
+                    "id_raiz": nodo.evento.id,
+                    "cant_nodos": len(eventos_subarbol),
+                    "profundidad": prof_actual,
+                    "eventos": eventos_subarbol
+                })
+
+            _evaluar(nodo.izquierda, prof_actual + 1)
+            _evaluar(nodo.derecha, prof_actual + 1)
+
+        _evaluar(self.raiz, prof_actual=0)
+
+        if not candidatos:
+            return None
+
+        # Desempate estricto: Mayor cantidad -> Mayor profundidad -> Mayor ID
+        candidatos.sort(
+            key=lambda c: (c["cant_nodos"], c["profundidad"], c["id_raiz"]),
+            reverse=True
+        )
+
+        return candidatos[0]
