@@ -1,5 +1,5 @@
-from typing import Callable, Dict, Optional
 import json
+from typing import Callable, Dict, Optional
 import tkinter as tk
 from tkinter import messagebox, ttk, filedialog
 
@@ -21,52 +21,57 @@ class VentanaEliminacionManual:
     self.escenario = escenario
     self.callback_al_eliminar = callback_al_eliminar
 
-    # Ventana modal un poco más amplia para acomodar los nuevos botones de JSON
+    # Configuración de la ventana modal
     self.ventana = tk.Toplevel(parent_window)
     self.ventana.title("Gestión y Eliminación de Evento")
-    self.ventana.geometry("380x260")
+    self.ventana.geometry("380x320")
     self.ventana.resizable(False, False)
     self.ventana.grab_set()
 
-    # Mensaje de confirmación original
+    # Etiqueta principal con el ID del evento
     ttk.Label(
         self.ventana,
-        text=f"¿Eliminar evento SIS-{self.evento.id:06d}?",
-        font=("Arial", 10, "bold"),
+        text=f"Evento: SIS-{self.evento.id:06d}",
+        font=("Arial", 11, "bold"),
     ).pack(pady=15)
 
-    # Botones originales de acción (Sí, Eliminar / Cancelar)
-    f_botones = ttk.Frame(self.ventana)
-    f_botones.pack(pady=5)
+    # Marco contenedor para los botones de acción
+    f_acciones = ttk.Frame(self.ventana)
+    f_acciones.pack(fill=tk.BOTH, expand=True, padx=20)
 
+    # 1. BOTÓN ELIMINAR
+    btn_eliminar = ttk.Button(
+        f_acciones, text="🗑️ Eliminar Evento", command=self._ejecutar_eliminacion
+    )
+    btn_eliminar.pack(fill=tk.X, pady=8)
+
+    # 2. BOTÓN GUARDAR JSON
+    btn_guardar = ttk.Button(
+        f_acciones, text="💾 Guardar en JSON", command=self.guardar_json
+    )
+    btn_guardar.pack(fill=tk.X, pady=8)
+
+    # 3. BOTÓN CARGAR JSON
+    btn_cargar = ttk.Button(
+        f_acciones, text="📂 Cargar desde JSON", command=self.cargar_json
+    )
+    btn_cargar.pack(fill=tk.X, pady=8)
+
+    # Botón inferior para cerrar o cancelar
     ttk.Button(
-        f_botones, text="Sí, Eliminar", command=self._ejecutar_eliminacion
-    ).pack(side=tk.LEFT, padx=5)
-    ttk.Button(
-        f_botones, text="Cancelar", command=self.ventana.destroy
-    ).pack(side=tk.LEFT, padx=5)
-
-    # Separador visual
-    ttk.Separator(self.ventana, orient="horizontal").pack(fill="x", padx=20, pady=15)
-
-    # Sección de respaldo / gestión JSON
-    ttk.Label(
-        self.ventana,
-        text="Gestión de Datos (JSON)",
-        font=("Arial", 9, "italic"),
-    ).pack(pady=2)
-
-    f_json = ttk.Frame(self.ventana)
-    f_json.pack(pady=5)
-
-    ttk.Button(
-        f_json, text="Guardar JSON", command=self.guardar_json
-    ).pack(side=tk.LEFT, padx=5)
-    ttk.Button(
-        f_json, text="Cargar JSON", command=self.cargar_json
-    ).pack(side=tk.LEFT, padx=5)
+        self.ventana, text="Cancelar", command=self.ventana.destroy
+    ).pack(pady=10)
 
   def _ejecutar_eliminacion(self):
+    """Método para eliminar el evento del árbol AVL, diccionario y escenario."""
+    # Cuadro de confirmación antes de borrar
+    if not messagebox.askyesno(
+        "Confirmar", 
+        f"¿Está seguro de eliminar el evento SIS-{self.evento.id:06d}?", 
+        parent=self.ventana
+    ):
+      return
+
     try:
       # 1. Histórico
       if hasattr(self.escenario, "historico"):
@@ -94,11 +99,8 @@ class VentanaEliminacionManual:
   def guardar_json(self, ruta="sismolab_backup.json"):
     """Método para guardar los eventos actuales del diccionario en un archivo JSON."""
     try:
-      # Convertimos el diccionario de eventos a una lista serializable si es necesario, 
-      # o guardamos las propiedades clave de los eventos recolectados.
       datos_a_guardar = []
       for eid, ev in self.dict_eventos.items():
-        # Intentamos extraer atributos comunes del evento de forma segura
         datos_a_guardar.append({
             "id": getattr(ev, "id", eid),
             "clave": getattr(ev, "clave", None),
@@ -117,7 +119,7 @@ class VentanaEliminacionManual:
       )
 
   def cargar_json(self):
-    """Método para cargar datos externos desde un archivo JSON."""
+    """Método para abrir un explorador de archivos y cargar registros JSON."""
     ruta = filedialog.askopenfilename(
         parent=self.ventana,
         title="Seleccionar archivo JSON",
