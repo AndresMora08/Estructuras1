@@ -14,7 +14,9 @@ class Evento:
         estacion_origen: Estacion,
         fecha_hora: str = None,
         estado: str = "Pendiente",
-        id_referencia = None
+        estado_catalogo: str = "Activo",  # <-- "Activo", "Archivado" o "Retirado"
+        id_referencia = None,
+        revision: int = 1  # <-- Recibe revisión con valor por defecto 1
     ):
         self.id = int(id_evento)
         self.magnitud = round(float(magnitud), 1)
@@ -32,9 +34,12 @@ class Evento:
             else datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         )
 
-        # Valores por defecto del sistema
-        self.revision = 1
+        # Estado de revisión/atención
+        self.revision = int(revision)
         self.estado = estado
+
+        # Estado del ciclo de vida en el catálogo ("Activo", "Archivado", "Retirado")
+        self.estado_catalogo = estado_catalogo
 
         # Atributo para asociación sísmica
         self.id_referencia = id_referencia
@@ -45,7 +50,7 @@ class Evento:
 
         # Calcula la prioridad e inserta la clave
         self.calcular_prioridad()
-        
+
         self.acceso_costoso = False
 
     @property
@@ -103,12 +108,13 @@ class Evento:
             "fecha_hora": self.fecha_hora,
             "revision": self.revision,
             "estado": self.estado,
+            "estado_catalogo": self.estado_catalogo,
             "id_referencia": self.id_referencia,
             "estaciones": self.estaciones,
             "prioridad": self.prioridad,
             "clave": self.clave,
         }
-        
+
     def evaluar_costo(self, profundidad_nodo: int, limite_L: int) -> None:
         if self.prioridad == 3 and profundidad_nodo > limite_L:
             self.acceso_costoso = True

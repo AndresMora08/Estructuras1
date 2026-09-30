@@ -7,3 +7,8 @@ class Reporte:
         self.evento = evento
         self.estacion_emisora = estacion_emisora
         self.revision = revision
+    
+    @property
+    def id_evento(self) -> int:
+        """Acceso rápido y cómodo al ID del evento."""
+        return self.evento.id

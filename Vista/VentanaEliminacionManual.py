@@ -65,6 +65,10 @@ class VentanaEliminacionManual:
 
     def _ejecutar_eliminacion(self):
         id_evt = getattr(self.evento, "id_evento", getattr(self.evento, "id", None))
+        if id_evt is None:
+            messagebox.showerror("Error", "No se pudo determinar el ID del evento.", parent=self.ventana)
+            return
+
         if not messagebox.askyesno(
             "Confirmar", 
             f"¿Está seguro de eliminar el evento SIS-{id_evt:06d}?", 
@@ -72,22 +76,15 @@ class VentanaEliminacionManual:
         ):
             return
 
-        try:
-            if hasattr(self.escenario, "historico"):
-                self.escenario.historico.append(self.evento)
+        # Delegación de la lógica de negocio al Escenario
+        exito, mensaje = self.escenario.eliminar_evento_por_id(id_evt)
 
-            if self.arbol_avl and hasattr(self.evento, "clave"):
-                self.arbol_avl.eliminar(self.evento.clave, getattr(self.escenario, "L", 3))
-
-            if id_evt in self.dict_eventos:
-                del self.dict_eventos[id_evt]
-
-            messagebox.showinfo("Éxito", "Evento eliminado correctamente.", parent=self.ventana)
+        if exito:
+            messagebox.showinfo("Éxito", mensaje, parent=self.ventana)
             self.ventana.destroy()
             self.callback_al_eliminar()
-
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo eliminar: {e}", parent=self.ventana)
+        else:
+            messagebox.showerror("Error", mensaje, parent=self.ventana)
 
     def guardar_json(self):
         """Delega la serialización completa al ControladorJSON."""

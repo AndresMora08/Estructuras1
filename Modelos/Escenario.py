@@ -34,11 +34,38 @@ class Escenario:
         self.L: int = 3
         self.T: float = 72.0
 
+    def eliminar_evento_por_id(self, id_evento: int) -> Tuple[bool, str]:
+        """
+        Elimina un evento individual del árbol AVL y del diccionario de eventos activos,
+        marca su estado_catalogo como 'Retirado' y lo traslada al historial.
+        """
+        if id_evento not in self.dict_eventos:
+            return False, f"El evento ID {id_evento} no existe en los eventos activos."
+
+        evento = self.dict_eventos[id_evento]
+
+        try:
+            # 1. Eliminar del árbol AVL si está inicializado
+            if self.arbol_avl and hasattr(evento, "clave"):
+                self.arbol_avl.eliminar(evento.clave, self.L)
+
+            # 2. Remover del diccionario de eventos activos
+            del self.dict_eventos[id_evento]
+
+            # 3. Actualizar estado de catálogo a 'Retirado' y trasladar al histórico
+            evento.estado_catalogo = "Retirado"
+            self.historico.append(evento)
+
+            return True, f"Evento SIS-{id_evento:06d} retirado del catálogo exitosamente."
+
+        except Exception as e:
+            return False, f"Error al eliminar el evento: {str(e)}"
+
     def archivar_evento_por_id(self, id_evento: int):
         """
         Verifica la rama del evento seleccionado. Si es archivable, elimina sus nodos del
         árbol mediante self.arbol_avl.eliminar(clave, L), traslada los eventos a self.historico
-        y guarda copia de respaldo para deshacer.
+        marcando su estado_catalogo = "Archivado" y guarda copia de respaldo para deshacer.
         """
         if not self.arbol_avl or not self.arbol_avl.raiz:
             return False, "El árbol AVL no está inicializado o está vacío.", None
@@ -75,7 +102,7 @@ class Escenario:
             "historico": list(self.historico)
         }
 
-        # 5. Eliminar cada evento del subárbol usando TU MÉTODO eliminar(clave, limite_L)
+        # 5. Eliminar cada evento del subárbol usando eliminar(clave, limite_L)
         for ev in eventos_a_archivar:
             # Eliminar del AVL activo por su clave
             self.arbol_avl.eliminar(ev.clave, self.L)
@@ -84,7 +111,8 @@ class Escenario:
             if ev.id in self.dict_eventos:
                 del self.dict_eventos[ev.id]
             
-            # Transferir al histórico
+            # Cambiar su estado en el catálogo y transferir al histórico
+            ev.estado_catalogo = "Archivado"
             self.historico.append(ev)
 
         return True, justificacion, ids_afectados
