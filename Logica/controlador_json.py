@@ -1,503 +1,420 @@
 import json
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Dict, List, Any
 from tkinter import filedialog, messagebox
 
-# Importación de modelos del dominio
+from Modelos.Evento import Evento
+from Modelos.Epicentro import Epicentro
 from Modelos.Zona import Zona
 from Modelos.Estacion import Estacion
-from Modelos.Epicentro import Epicentro
-from Modelos.Evento import Evento
 from Modelos.Nodo import Nodo
-from Modelos.AVL import AVL
-from Modelos.BST import ArbolBST
 
 
 class ControladorJSON:
+    FORMATO_ISO = "%Y-%m-%dT%H:%M:%SZ"
 
     # =========================================================================
-    # 1. EXPLORADOR DE ARCHIVOS (I/O)
+    # VALIDACIONES DE PARÁMETROS SEGÚN ESPECIFICACIÓN
     # =========================================================================
-    @staticmethod
-    def seleccionar_archivo_guardar(parent_window=None) -> Optional[str]:
-        return filedialog.asksaveasfilename(
-            parent=parent_window,
-            title="Guardar Escenario Estructural (JSON)",
-            defaultextension=".json",
-            filetypes=[("Archivos JSON", "*.json"), ("Todos los archivos", "*.*")]
-        )
 
     @staticmethod
-    def seleccionar_archivo_cargar(parent_window=None, titulo: str = "Seleccionar Archivo JSON") -> Optional[str]:
-        return filedialog.askopenfilename(
-            parent=parent_window,
-            title=titulo,
-            filetypes=[("Archivos JSON", "*.json"), ("Todos los archivos", "*.*")]
-        )
+    def _validar_decimal_max_un_decimal(valor: float, nombre_campo: str):
+        """Valida que el número no tenga más de un dígito decimal."""
+        val_round = round(valor, 4)
+        if round(val_round, 1) != val_round:
+            raise ValueError(f"El campo '{nombre_campo}' ({valor}) tiene más de 1 decimal permitido.")
 
-    # =========================================================================
-    # 2. GUARDADO ESTRUCTURAL COMPLETO
-    # =========================================================================
     @classmethod
-    def guardar_escenario_completo(cls, escenario, parent_window=None) -> bool:
-        ruta = cls.seleccionar_archivo_guardar(parent_window)
-        if not ruta:
-            return False
+    def validar_datos_evento(cls, d: Dict[str, Any]):
+        """Valida rigurosamente que el diccionario JSON cumpla con las reglas de negocio."""
+        # 1. Identificador: Entero entre 1 y 999999
+        id_val = d.get("id")
+        if not isinstance(id_val, int) or isinstance(id_val, bool):
+            raise ValueError(f"El ID de evento debe ser un número entero. Recibido: {id_val}")
+        if not (1 <= id_val <= 999999):
+            raise ValueError(f"El ID de evento debe estar entre 1 y 999999. Recibido: {id_val}")
 
-        try:
-            # Serialización recursiva del árbol activo conservando su topología real
-            def _serializar_nodo(nodo: Optional[Nodo]):
-                if nodo is None:
-                    return None
-                ev = nodo.evento
-                return {
-                    "evento": {
-                        "id_evento": getattr(ev, "id_evento", getattr(ev, "id", None)),
-                        "magnitud": getattr(ev, "magnitud", 0.0),
-                        "profundidad": getattr(ev, "profundidad", 0.0),
-                        "fecha_hora": getattr(ev, "fecha_hora", None),
-                        "clave": list(getattr(ev, "clave", [])),
-                        "prioridad": getattr(ev, "prioridad", None),
-                        "estado_atencion": getattr(ev, "estado", getattr(ev, "estado_atencion", "PENDIENTE")),
-                        "epicentro": {
-                            "x": ev.epicentro.x,
-                            "y": ev.epicentro.y,
-                            "zona": ev.epicentro.zona.nombre if getattr(ev.epicentro, "zona", None) else None
-                        } if getattr(ev, "epicentro", None) else None,
-                        "estacion_origen": {
-                            "id_estacion": ev.estacion_origen.id_estacion,
-                            "nombre": ev.estacion_origen.nombre,
-                            "x": ev.estacion_origen.x,
-                            "y": ev.estacion_origen.y,
-                            "zona": ev.estacion_origen.zona.nombre if getattr(ev.estacion_origen, "zona", None) else None
-                        } if getattr(ev, "estacion_origen", None) else None
-                    },
-                    "altura": getattr(nodo, "altura", 1),
-                    "factor_balance": getattr(nodo, "factor_balance", 0),
-                    "izquierdo": _serializar_nodo(getattr(nodo, "izquierda", None)),
-                    "derecho": _serializar_nodo(getattr(nodo, "derecha", None))
-                }
+        # 2. Magnitud M: Decimal finito entre -2.0 y 10.0, máximo 1 decimal
+        mag_val = d.get("magnitud")
+        if not isinstance(mag_val, (int, float)) or isinstance(mag_val, bool):
+            raise ValueError(f"La magnitud debe ser un número. Recibido: {mag_val}")
+        mag_float = float(mag_val)
+        if not (-2.0 <= mag_float <= 10.0):
+            raise ValueError(f"La magnitud ({mag_float}) debe estar entre -2.0 y 10.0")
+        cls._validar_decimal_max_un_decimal(mag_float, "magnitud")
 
-            raiz_nodo = getattr(escenario.arbol_avl, "raiz", None) if getattr(escenario, "arbol_avl", None) else None
+        # 3. Profundidad H: Decimal entre 0.0 y 700.0 km, máximo 1 decimal
+        prof_val = d.get("profundidad")
+        if not isinstance(prof_val, (int, float)) or isinstance(prof_val, bool):
+            raise ValueError(f"La profundidad debe ser un número. Recibido: {prof_val}")
+        prof_float = float(prof_val)
+        if not (0.0 <= prof_float <= 700.0):
+            raise ValueError(f"La profundidad ({prof_float}) debe estar entre 0.0 y 700.0 km")
+        cls._validar_decimal_max_un_decimal(prof_float, "profundidad")
 
-            # Construcción del esquema JSON completo
-            datos_completos = {
-                "parametros": {
-                    "W": getattr(escenario, "W", 48.0),
-                    "R": getattr(escenario, "R", 40.0),
-                    "L": getattr(escenario, "L", 3),
-                    "T": getattr(escenario, "T", 72.0),
-                    "reloj_simulacion": getattr(escenario, "reloj_simulacion", 0)
-                },
-                "modo_ejecucion": {
-                    "modo_estres": getattr(getattr(escenario, "arbol_avl", None), "modo_estres", False)
-                },
-                "zonas": [
-                    {
-                        "nombre": z.nombre,
-                        "x_min": z.x_min,
-                        "x_max": z.x_max,
-                        "y_min": z.y_min,
-                        "y_max": z.y_max,
-                        "es_poblada": getattr(z, "poblada", False)
-                    } for z in getattr(escenario, "zonas", [])
-                ],
-                "estaciones": [
-                    {
-                        "id_estacion": est.id_estacion,
-                        "nombre": est.nombre,
-                        "x": est.x,
-                        "y": est.y,
-                        "zona": est.zona.nombre if getattr(est, "zona", None) else None
-                    } for est in getattr(escenario, "estaciones", [])
-                ],
-                "epicentros": [
-                    {
-                        "x": epi.x,
-                        "y": epi.y,
-                        "zona": epi.zona.nombre if getattr(epi, "zona", None) else None
-                    } for epi in getattr(escenario, "epicentros", [])
-                ],
-                "topologia_arbol": _serializar_nodo(raiz_nodo),
-                "cola_reportes": [
-                    getattr(r, "evento", r).id if hasattr(getattr(r, "evento", r), "id") else getattr(getattr(r, "evento", r), "id_evento", None)
-                    for r in getattr(escenario, "cola_reportes", [])
-                ],
-                "historico": [
-                    {
-                        "id_evento": getattr(ev, "id_evento", getattr(ev, "id", None)),
-                        "magnitud": getattr(ev, "magnitud", 0.0),
-                        "profundidad": getattr(ev, "profundidad", 0.0),
-                        "fecha_hora": getattr(ev, "fecha_hora", None),
-                        "epicentro": {
-                            "x": ev.epicentro.x,
-                            "y": ev.epicentro.y,
-                            "zona": ev.epicentro.zona.nombre if getattr(ev, "epicentro", None) and getattr(ev.epicentro, "zona", None) else None
-                        } if getattr(ev, "epicentro", None) else None,
-                        "estacion_origen": {
-                            "id_estacion": ev.estacion_origen.id_estacion,
-                            "nombre": ev.estacion_origen.nombre,
-                            "x": ev.estacion_origen.x,
-                            "y": ev.estacion_origen.y,
-                            "zona": ev.estacion_origen.zona.nombre if getattr(ev, "estacion_origen", None) and getattr(ev.estacion_origen, "zona", None) else None
-                        } if getattr(ev, "estacion_origen", None) else None
-                    } for ev in getattr(escenario, "historico", [])
-                ],
-                "metricas": getattr(escenario, "metricas", {})
+        # 4. Epicentro: x e y en km entre 0.0 y 1000.0, máximo 1 decimal
+        epi_dict = d.get("epicentro")
+        if not isinstance(epi_dict, dict):
+            raise ValueError("El objeto 'epicentro' es obligatorio.")
+        
+        for coord_key in ["x", "y"]:
+            if coord_key not in epi_dict:
+                raise ValueError(f"Falta la coordenada '{coord_key}' en el epicentro.")
+            c_val = epi_dict[coord_key]
+            if not isinstance(c_val, (int, float)) or isinstance(c_val, bool):
+                raise ValueError(f"La coordenada epicentro '{coord_key}' debe ser numérica. Recibido: {c_val}")
+            c_float = float(c_val)
+            if not (0.0 <= c_float <= 1000.0):
+                raise ValueError(f"La coordenada epicentro '{coord_key}' ({c_float}) debe estar entre 0.0 y 1000.0 km")
+            cls._validar_decimal_max_un_decimal(c_float, f"epicentro.{coord_key}")
+
+        # 5. Revisión: Entera positiva (>= 1)
+        rev_val = d.get("revision")
+        if not isinstance(rev_val, int) or isinstance(rev_val, bool) or rev_val < 1:
+            raise ValueError(f"La revisión debe ser un número entero positivo (>= 1). Recibido: {rev_val}")
+
+        # 6. Estación origen
+        id_est = d.get("estacion_origen")
+        if not id_est or not isinstance(id_est, str):
+            raise ValueError("La estación que emite el reporte ('estacion_origen') es obligatoria.")
+
+        # 7. Estado de atención: Debe ser 'Pendiente' o 'Revisado'
+        estado_val = d.get("estado")
+        if estado_val not in ["Pendiente", "Revisado"]:
+            raise ValueError(f"El estado de atención debe ser 'Pendiente' o 'Revisado'. Recibido: '{estado_val}'")
+
+    # =========================================================================
+    # DICCIONARIO <-> OBJETOS
+    # =========================================================================
+
+    @classmethod
+    def dict_a_evento(cls, d: Dict[str, Any], escenario: Any = None) -> Evento:
+        cls.validar_datos_evento(d)
+
+        id_evento = int(d["id"])
+        zonas_escenario: List[Zona] = getattr(escenario, "zonas", []) if escenario else []
+
+        epi_dict = d["epicentro"]
+        x_epi = float(epi_dict["x"])
+        y_epi = float(epi_dict["y"])
+
+        # 1. Registrar / Crear Zona si viene definida
+        if "zona" in epi_dict and isinstance(epi_dict["zona"], dict):
+            z_data = epi_dict["zona"]
+            nombre_z = str(z_data.get("nombre", "Zona Defecto"))
+
+            zona_existente = next((z for z in zonas_escenario if z.nombre == nombre_z), None)
+
+            if not zona_existente:
+                nueva_zona = Zona(
+                    nombre=nombre_z,
+                    x_min=float(z_data.get("x_min", 0.0)),
+                    x_max=float(z_data.get("x_max", 1000.0)),
+                    y_min=float(z_data.get("y_min", 0.0)),
+                    y_max=float(z_data.get("y_max", 1000.0)),
+                    poblada=bool(z_data.get("poblada", False)),
+                )
+                if escenario and hasattr(escenario, "zonas") and isinstance(escenario.zonas, list):
+                    escenario.zonas.append(nueva_zona)
+                zonas_escenario.append(nueva_zona)
+
+        # 2. Crear Epicentro
+        epicentro = Epicentro(x_epi, y_epi, zonas_escenario)
+
+        if escenario and hasattr(escenario, "epicentros") and isinstance(escenario.epicentros, list):
+            escenario.epicentros.append(epicentro)
+
+        # 3. Registrar / Crear Estación
+        id_est = str(d["estacion_origen"])
+        est_dict = d.get("estacion_origen_datos", {})
+
+        estaciones_escenario = getattr(escenario, "estaciones", []) if escenario else []
+        mapa_estaciones = {
+            e.id_estacion: e for e in estaciones_escenario if isinstance(e, Estacion)
+        } if estaciones_escenario else {}
+
+        if id_est in mapa_estaciones:
+            estacion_obj = mapa_estaciones[id_est]
+        else:
+            x_est = float(est_dict.get("x", x_epi))
+            y_est = float(est_dict.get("y", y_epi))
+            nombre_est = str(est_dict.get("nombre", f"Estación {id_est}"))
+
+            if not (0.0 <= x_est <= 1000.0 and 0.0 <= y_est <= 1000.0):
+                raise ValueError(f"Las coordenadas de la estación {id_est} están fuera del rango [0.0, 1000.0].")
+
+            zona_est = next((z for z in zonas_escenario if z.contiene_punto(x_est, y_est)), None)
+
+            estacion_obj = Estacion(
+                id_estacion=id_est,
+                nombre=nombre_est,
+                x=x_est,
+                y=y_est,
+                zona=zona_est,
+            )
+
+            if escenario and hasattr(escenario, "estaciones"):
+                if isinstance(escenario.estaciones, list):
+                    escenario.estaciones.append(estacion_obj)
+                elif isinstance(escenario.estaciones, dict):
+                    escenario.estaciones[id_est] = estacion_obj
+
+        # 4. Asignar fecha e instanciar Evento
+        fecha_hora_iso = str(d.get("fecha_hora", ""))
+
+        evento = Evento(
+            id_evento=id_evento,
+            magnitud=float(d["magnitud"]),
+            profundidad=float(d["profundidad"]),
+            epicentro=epicentro,
+            estacion_origen=estacion_obj,
+            fecha_hora=fecha_hora_iso,
+            estado=d.get("estado", "Pendiente"),
+            estado_catalogo=d.get("estado_catalogo", "Activo"),
+            id_referencia=d.get("id_referencia"),
+            revision=int(d["revision"]),
+        )
+
+        if "estaciones" in d and isinstance(d["estaciones"], list):
+            evento.estaciones = d["estaciones"]
+
+        return evento
+
+    @classmethod
+    def evento_a_dict(cls, evento: Evento) -> Dict[str, Any]:
+        """Convierte una instancia de Evento a un diccionario serializable para JSON."""
+        # Extraer datos del epicentro
+        x_epi = round(float(evento.epicentro.x), 1) if hasattr(evento, "epicentro") and evento.epicentro else 0.0
+        y_epi = round(float(evento.epicentro.y), 1) if hasattr(evento, "epicentro") and evento.epicentro else 0.0
+
+        zona_dict = None
+        if hasattr(evento.epicentro, "zona") and evento.epicentro.zona:
+            z = evento.epicentro.zona
+            zona_dict = {
+                "nombre": getattr(z, "nombre", "Zona Defecto"),
+                "x_min": getattr(z, "x_min", 0.0),
+                "x_max": getattr(z, "x_max", 1000.0),
+                "y_min": getattr(z, "y_min", 0.0),
+                "y_max": getattr(z, "y_max", 1000.0),
+                "poblada": getattr(z, "poblada", False),
             }
 
-            with open(ruta, "w", encoding="utf-8") as archivo:
-                json.dump(datos_completos, archivo, indent=4, ensure_ascii=False)
+        # Extraer datos de la estación origen
+        est_origen_id = "EST-01"
+        est_origen_datos = None
 
-            messagebox.showinfo("Éxito", f"Escenario guardado en:\n{ruta}", parent=parent_window)
-            return True
+        if hasattr(evento, "estacion_origen") and evento.estacion_origen:
+            if isinstance(evento.estacion_origen, Estacion):
+                est_origen_id = evento.estacion_origen.id_estacion
+                est_origen_datos = {
+                    "nombre": evento.estacion_origen.nombre,
+                    "x": round(float(evento.estacion_origen.x), 1),
+                    "y": round(float(evento.estacion_origen.y), 1),
+                }
+            else:
+                est_origen_id = str(evento.estacion_origen)
 
-        except Exception as e:
-            messagebox.showerror("Error de Guardado", f"No se pudo guardar el archivo:\n{e}", parent=parent_window)
-            return False
-
-    # =========================================================================
-    # 3. MÉTODOS AUXILIARES DE RECONSTRUCCIÓN DE OBJETOS
-    # =========================================================================
-    @classmethod
-    def _obtener_o_crear_zona(cls, datos_z, zonas_lista: List[Zona]) -> Zona:
-        nombre = datos_z if isinstance(datos_z, str) else datos_z.get("nombre", "Zona")
-        for z in zonas_lista:
-            if z.nombre == nombre:
-                return z
-        poblada = False if isinstance(datos_z, str) else datos_z.get("es_poblada", datos_z.get("poblada", False))
-        nueva_z = Zona(
-            nombre=nombre,
-            x_min=0.0 if isinstance(datos_z, str) else datos_z.get("x_min", 0.0),
-            x_max=1000.0 if isinstance(datos_z, str) else datos_z.get("x_max", 1000.0),
-            y_min=0.0 if isinstance(datos_z, str) else datos_z.get("y_min", 0.0),
-            y_max=1000.0 if isinstance(datos_z, str) else datos_z.get("y_max", 1000.0),
-            poblada=poblada
-        )
-        zonas_lista.append(nueva_z)
-        return nueva_z
-
-    @classmethod
-    def _obtener_o_crear_estacion(cls, datos_est, estaciones_lista: List[Estacion], zonas_lista: List[Zona]) -> Estacion:
-        id_est = str(datos_est.get("id_estacion", "EST-01")).strip()
-        for est in estaciones_lista:
-            if est.id_estacion == id_est:
-                return est
-        zona_obj = cls._obtener_o_crear_zona(datos_est.get("zona", "Zona Generica"), zonas_lista)
-        nueva_est = Estacion(
-            id_estacion=id_est,
-            nombre=datos_est.get("nombre", "Estacion"),
-            x=datos_est.get("x", 0.0),
-            y=datos_est.get("y", 0.0),
-            zona=zona_obj
-        )
-        estaciones_lista.append(nueva_est)
-        return nueva_est
-
-    @classmethod
-    def _crear_evento_objeto(cls, d: dict, zonas_lista: List[Zona], estaciones_lista: List[Estacion], epicentros_lista: List[Epicentro]) -> Evento:
-        d_epi = d.get("epicentro", {})
-        d_est = d.get("estacion_origen", {})
-
-        z_epi = cls._obtener_o_crear_zona(d_epi.get("zona", "Zona"), zonas_lista)
-        epicentro = Epicentro(x=d_epi.get("x", 0.0), y=d_epi.get("y", 0.0))
-        epicentro.zona = z_epi
-        epicentros_lista.append(epicentro)
-
-        estacion = cls._obtener_o_crear_estacion(d_est, estaciones_lista, zonas_lista)
-
-        id_evt = d.get("id_evento", d.get("id"))
-        evt = Evento(
-            id_evento=id_evt,
-            magnitud=d.get("magnitud", 0.0),
-            profundidad=d.get("profundidad", 0.0),
-            epicentro=epicentro,
-            estacion_origen=estacion,
-            fecha_hora=d.get("fecha_hora")
-        )
-        if "estado_atencion" in d:
-            evt.estado = d["estado_atencion"]
-        if "prioridad" in d:
-            evt.actualizar_prioridad_y_clave(d["prioridad"])
-
-        return evt
+        return {
+            "id": int(evento.id),
+            "magnitud": round(float(evento.magnitud), 1),
+            "profundidad": round(float(evento.profundidad), 1),
+            "epicentro": {
+                "x": x_epi,
+                "y": y_epi,
+                "zona": zona_dict
+            },
+            "estacion_origen": est_origen_id,
+            "estacion_origen_datos": est_origen_datos,
+            "fecha_hora": str(evento.fecha_hora),
+            "revision": int(evento.revision),
+            "estado": str(evento.estado),
+            "estado_catalogo": getattr(evento, "estado_catalogo", "Activo"),
+            "id_referencia": getattr(evento, "id_referencia", None),
+            "estaciones": getattr(evento, "estaciones", [est_origen_id])
+        }
 
     # =========================================================================
-    # 4. MODALIDAD: CARGA POR INSERCIONES
+    # MÉTODOS DE CARGA (READ)
     # =========================================================================
+
     @classmethod
-    def cargar_por_inserciones(cls, escenario, parent_window=None, lista_eventos: Optional[list] = None) -> bool:
-        """
-        Punto de entrada invocado por la GUI. Si no se pasa 'lista_eventos',
-        solicita seleccionar el archivo JSON interactivamente.
-        """
-        if lista_eventos is None:
-            ruta = cls.seleccionar_archivo_cargar(parent_window, "Seleccionar JSON para Carga por Inserciones")
-            if not ruta:
-                return False
+    def cargar_eventos_json(cls, ruta_archivo: str, escenario: Any = None) -> List[Evento]:
+        with open(ruta_archivo, "r", encoding="utf-8") as f:
+            datos = json.load(f)
+
+        if not isinstance(datos, list):
+            raise ValueError("El archivo JSON debe contener una lista de eventos.")
+
+        eventos = []
+        for i, item in enumerate(datos):
             try:
-                with open(ruta, "r", encoding="utf-8") as archivo:
-                    lista_eventos = json.load(archivo)
-            except Exception as e:
-                messagebox.showerror("Error de Lectura", f"No se pudo leer el archivo JSON:\n{e}", parent=parent_window)
-                return False
+                ev = cls.dict_a_evento(item, escenario)
+                eventos.append(ev)
+            except ValueError as ve:
+                raise ValueError(f"Error en el evento #{i + 1} (ID: {item.get('id', 'N/A')}): {ve}")
 
-        if not isinstance(lista_eventos, list):
-            messagebox.showerror("Error de Formato", "El archivo debe contener una lista JSON de eventos.", parent=parent_window)
+        return eventos
+
+    @classmethod
+    def cargar_por_inserciones(cls, *args, **kwargs) -> bool:
+        ruta_archivo, escenario, parent = cls._extraer_argumentos(args, kwargs)
+
+        if not ruta_archivo:
+            ruta_archivo = filedialog.askopenfilename(
+                title="Seleccionar JSON de Inserciones",
+                filetypes=[("Archivos JSON", "*.json"), ("Todos los archivos", "*.*")],
+                parent=parent,
+            )
+
+        if not ruta_archivo:
             return False
 
-        return cls.procesar_carga_por_inserciones(lista_eventos, escenario, parent_window)
-
-    @classmethod
-    def procesar_carga_por_inserciones(cls, lista_eventos: list, escenario, parent_window=None) -> bool:
-        ids_vistos = set()
-        for d in lista_eventos:
-            id_e = d.get("id_evento", d.get("id"))
-            if id_e in ids_vistos:
-                messagebox.showerror(
-                    "Carga Rechazada",
-                    f"Archivo inválido: Se detectó el identificador duplicado SIS-{id_e:06d}.\n"
-                    "El escenario anterior se mantiene intacto.",
-                    parent=parent_window
-                )
-                return False
-            ids_vistos.add(id_e)
-
-        # Construir AVL y BST desde cero
-        nuevo_avl = AVL(modo_estres=False)
-        nuevo_bst = ArbolBST()
-
-        temp_zonas = list(escenario.zonas)
-        temp_estaciones = list(escenario.estaciones)
-        temp_epicentros = list(escenario.epicentros)
-        temp_dict = {}
-
-        for d in lista_eventos:
-            evt = cls._crear_evento_objeto(d, temp_zonas, temp_estaciones, temp_epicentros)
-            temp_dict[evt.id] = evt
-            nodo_avl = Nodo(evento=evt)
-            nuevo_avl.insertar(nodo_avl, escenario.L)
-            nuevo_bst.insertar(evt)
-
-        # Cálculo de métricas
-        def _metricas(nodo):
-            if nodo is None:
-                return 0, 0, 0
-            alt_izq, pmax_izq, h_izq = _metricas(getattr(nodo, "izquierda", None))
-            alt_der, pmax_der, h_der = _metricas(getattr(nodo, "derecha", None))
-            alt = 1 + max(alt_izq, alt_der)
-            pmax = max(pmax_izq, pmax_der) + 1 if (alt_izq or alt_der) else 0
-            hojas = 1 if (getattr(nodo, "izquierda", None) is None and getattr(nodo, "derecha", None) is None) else (h_izq + h_der)
-            return alt, pmax, hojas
-
-        alt_avl, pmax_avl, h_avl = _metricas(nuevo_avl.raiz)
-        alt_bst, pmax_bst, h_bst = _metricas(nuevo_bst.raiz)
-
-        # Confirmación y sustitución atómica
-        escenario.zonas = temp_zonas
-        escenario.estaciones = temp_estaciones
-        escenario.epicentros = temp_epicentros
-        escenario.dict_eventos = temp_dict
-        escenario.arbol_avl = nuevo_avl
-        escenario.arbol_bst = nuevo_bst
-
-        raiz_avl_id = getattr(nuevo_avl.raiz.evento, "id", getattr(nuevo_avl.raiz.evento, "id_evento", None)) if nuevo_avl.raiz else "N/A"
-        raiz_bst_id = getattr(nuevo_bst.raiz.evento, "id", getattr(nuevo_bst.raiz.evento, "id_evento", None)) if nuevo_bst.raiz else "N/A"
-
-        res_msg = (
-            "Carga por Inserción Exitosa:\n\n"
-            f"🌳 Árbol AVL (Con Balanceo):\n"
-            f"  - Raíz: SIS-{raiz_avl_id:06d}\n"
-            f"  - Altura: {alt_avl}\n"
-            f"  - Profundidad Máxima: {pmax_avl}\n"
-            f"  - Cantidad de Hojas: {h_avl}\n\n"
-            f"🌲 Árbol BST (Sin Balanceo):\n"
-            f"  - Raíz: SIS-{raiz_bst_id:06d}\n"
-            f"  - Altura: {alt_bst}\n"
-            f"  - Profundidad Máxima: {pmax_bst}\n"
-            f"  - Cantidad de Hojas: {h_bst}"
-        )
-        messagebox.showinfo("Resultados de Carga por Inserción", res_msg, parent=parent_window)
-        return True
-
-    # =========================================================================
-    # 5. MODALIDAD: CARGA POR TOPOLOGÍA
-    # =========================================================================
-    @classmethod
-    def cargar_por_topologia(cls, escenario, parent_window=None, datos: Optional[dict] = None) -> bool:
-        """
-        Punto de entrada invocado por la GUI. Si no se entregan los datos en dict,
-        solicita seleccionar el archivo JSON interactivamente.
-        """
-        if datos is None:
-            ruta = cls.seleccionar_archivo_cargar(parent_window, "Seleccionar JSON para Carga por Topología")
-            if not ruta:
-                return False
-            try:
-                with open(ruta, "r", encoding="utf-8") as archivo:
-                    datos = json.load(archivo)
-            except Exception as e:
-                messagebox.showerror("Error de Lectura", f"No se pudo leer el archivo JSON:\n{e}", parent=parent_window)
-                return False
-
-        if not isinstance(datos, dict) or "topologia_arbol" not in datos:
-            messagebox.showerror("Error de Formato", "El archivo no contiene la clave 'topologia_arbol' requerida.", parent=parent_window)
-            return False
-
-        return cls.procesar_carga_por_topologia(datos, escenario, parent_window)
-
-    @classmethod
-    def procesar_carga_por_topologia(cls, datos: dict, escenario, parent_window=None) -> bool:
         try:
-            # 1. Copia temporal para reconstrucción aislada
-            temp_zonas = [
-                Zona(z["nombre"], z["x_min"], z["x_max"], z["y_min"], z["y_max"], z.get("es_poblada", z.get("poblada", False)))
-                for z in datos.get("zonas", [])
-            ]
-            temp_estaciones = []
-            for est in datos.get("estaciones", []):
-                cls._obtener_o_crear_estacion(est, temp_estaciones, temp_zonas)
+            eventos = cls.cargar_eventos_json(ruta_archivo, escenario)
 
-            temp_epicentros = [
-                Epicentro(epi["x"], epi["y"], zonas_escenario=temp_zonas)
-                for epi in datos.get("epicentros", [])
-            ]
+            for ev in eventos:
+                if escenario and hasattr(escenario, "dict_eventos"):
+                    if ev.id in escenario.dict_eventos:
+                        raise ValueError(f"El ID {ev.id} ya existe en el escenario y no se puede duplicar.")
+                    escenario.dict_eventos[ev.id] = ev
 
-            temp_dict = {}
-            ids_activos = set()
-            ids_historicos = set()
-            nodos_visitados = set()
-            desbalance_detectado = False
+                if escenario and hasattr(escenario, "arbol_avl") and escenario.arbol_avl:
+                    nodo = Nodo(ev)
+                    escenario.arbol_avl.insertar(nodo, escenario.L)
 
-            # Validar histórico primero
-            for h in datos.get("historico", []):
-                id_h = h.get("id_evento", h.get("id"))
-                if id_h in ids_historicos:
-                    raise ValueError(f"Identificador duplicado en Histórico: SIS-{id_h:06d}")
-                ids_historicos.add(id_h)
-
-            # Reconstrucción recursiva de la topología sin reinserciones
-            def _deserializar_nodo(dict_nodo) -> Optional[Nodo]:
-                nonlocal desbalance_detectado
-                if dict_nodo is None:
-                    return None
-
-                evt_data = dict_nodo["evento"]
-                id_evt = evt_data.get("id_evento", evt_data.get("id"))
-
-                # Validación de unicidad entre activos e históricos
-                if id_evt in ids_activos:
-                    raise ValueError(f"Violación de Unicidad Activa: Evento SIS-{id_evt:06d} duplicado.")
-                if id_evt in ids_historicos:
-                    raise ValueError(f"Conflicto Activo-Histórico: Evento SIS-{id_evt:06d} existe en histórico.")
-                if id(dict_nodo) in nodos_visitados:
-                    raise ValueError("Ciclo detectado en la topología: Un nodo reaparece en múltiples posiciones.")
-
-                ids_activos.add(id_evt)
-                nodos_visitados.add(id(dict_nodo))
-
-                evt = cls._crear_evento_objeto(evt_data, temp_zonas, temp_estaciones, temp_epicentros)
-                temp_dict[evt.id] = evt
-
-                # Validación de prioridad calculada vs almacenada
-                p_esperada = evt.prioridad
-                p_almacenada = dict_nodo.get("evento", {}).get("prioridad", p_esperada)
-                if p_esperada != p_almacenada:
-                    raise ValueError(f"Inconsistencia de Prioridad en SIS-{evt.id:06d}: Calculada={p_esperada}, Guardada={p_almacenada}")
-
-                nodo = Nodo(evento=evt)
-
-                # Recuperación explícita de enlaces
-                nodo.izquierda = _deserializar_nodo(dict_nodo.get("izquierdo"))
-                nodo.derecha = _deserializar_nodo(dict_nodo.get("derecho"))
-
-                # Validación de Orden Global BST
-                if nodo.izquierda and nodo.izquierda.clave >= nodo.clave:
-                    raise ValueError(f"Violación de Orden BST: Hijo Izquierdo {nodo.izquierda.clave} >= Padre {nodo.clave}")
-                if nodo.derecha and nodo.derecha.clave <= nodo.clave:
-                    raise ValueError(f"Violación de Orden BST: Hijo Derecho {nodo.derecha.clave} <= Padre {nodo.clave}")
-
-                # Validación de Alturas y Balances
-                alt_izq = nodo.izquierda.altura if nodo.izquierda else 0
-                alt_der = nodo.derecha.altura if nodo.derecha else 0
-                alt_calculada = 1 + max(alt_izq, alt_der)
-                factor_bal = alt_izq - alt_der
-
-                nodo.altura = dict_nodo.get("altura", alt_calculada)
-                if nodo.altura != alt_calculada:
-                    raise ValueError(f"Altura inconsistente en SIS-{evt.id:06d}: Guardada={nodo.altura}, Real={alt_calculada}")
-
-                if abs(factor_bal) > 1:
-                    desbalance_detectado = True
-
-                return nodo
-
-            raiz_reconstruida = _deserializar_nodo(datos.get("topologia_arbol"))
-
-            # Manejo del Modo Estrés según estado o JSON
-            modo_estres_solicitado = datos.get("modo_ejecucion", {}).get("modo_estres", getattr(getattr(escenario, "arbol_avl", None), "modo_estres", False))
-
-            if desbalance_detectado and not modo_estres_solicitado:
-                raise ValueError("La topología leída está desbalanceada. Requiere Modo Estrés activado para poder cargarse.")
-
-            # Reconstrucción del Histórico
-            historico_reconstruido = [
-                cls._crear_evento_objeto(h, temp_zonas, temp_estaciones, temp_epicentros)
-                for h in datos.get("historico", [])
-            ]
-
-            # Reemplazar escenario atómicamente
-            p = datos.get("parametros", {})
-            escenario.W = p.get("W", escenario.W)
-            escenario.R = p.get("R", escenario.R)
-            escenario.L = p.get("L", escenario.L)
-            escenario.T = p.get("T", escenario.T)
-            if "reloj_simulacion" in p:
-                escenario.reloj_simulacion = p["reloj_simulacion"]
-
-            escenario.zonas = temp_zonas
-            escenario.estaciones = temp_estaciones
-            escenario.epicentros = temp_epicentros
-            escenario.dict_eventos = temp_dict
-            escenario.historico = historico_reconstruido
-
-            escenario.arbol_avl = AVL(modo_estres=modo_estres_solicitado)
-            escenario.arbol_avl.raiz = raiz_reconstruida
-            escenario.arbol_avl.actualizar_profundidades(escenario.L)
-
-            alerta_estres = " (Cargado bajo MODO ESTRÉS debido a desbalance)" if desbalance_detectado else ""
-            messagebox.showinfo("Éxito", f"Topología del escenario cargada correctamente{alerta_estres}.", parent=parent_window)
             return True
 
-        except Exception as e:
+        except Exception as error:
+            print(f"Error al cargar por inserciones: {error}")
             messagebox.showerror(
-                "Carga Rechazada",
-                f"No se pudo reemplazar el escenario debido a errores en el archivo:\n\n{e}\n\n"
-                "El escenario anterior se conserva sin modificaciones.",
-                parent=parent_window
+                "Error de Validación JSON",
+                f"No se pudo cargar el archivo por violar las reglas de negocio:\n\n{error}",
+                parent=parent,
+            )
+            return False
+
+    @classmethod
+    def cargar_por_topologia(cls, *args, **kwargs) -> bool:
+        ruta_archivo, escenario, parent = cls._extraer_argumentos(args, kwargs)
+
+        if not ruta_archivo:
+            ruta_archivo = filedialog.askopenfilename(
+                title="Seleccionar JSON de Topología",
+                filetypes=[("Archivos JSON", "*.json"), ("Todos los archivos", "*.*")],
+                parent=parent,
+            )
+
+        if not ruta_archivo:
+            return False
+
+        try:
+            eventos = cls.cargar_eventos_json(ruta_archivo, escenario)
+
+            for ev in eventos:
+                if escenario and hasattr(escenario, "dict_eventos"):
+                    if ev.id in escenario.dict_eventos:
+                        ev_existente = escenario.dict_eventos[ev.id]
+
+                        p_ant = ev_existente.prioridad
+                        m_ant = ev_existente.magnitud
+
+                        ev_existente.magnitud = ev.magnitud
+                        ev_existente.profundidad = ev.profundidad
+                        ev_existente.epicentro = ev.epicentro
+                        ev_existente.fecha_hora = ev.fecha_hora
+                        ev_existente.revision = ev.revision
+
+                        ev_existente.calcular_prioridad()
+
+                        if hasattr(escenario, "arbol_avl") and escenario.arbol_avl:
+                            escenario.arbol_avl.eliminar((p_ant, m_ant, ev.id), escenario.L)
+                            nodo = Nodo(ev_existente)
+                            escenario.arbol_avl.insertar(nodo, escenario.L)
+                    else:
+                        escenario.dict_eventos[ev.id] = ev
+                        if hasattr(escenario, "arbol_avl") and escenario.arbol_avl:
+                            nodo = Nodo(ev)
+                            escenario.arbol_avl.insertar(nodo, escenario.L)
+
+            return True
+
+        except Exception as error:
+            print(f"Error al cargar topología: {error}")
+            messagebox.showerror(
+                "Error de Carga de Topología",
+                f"Error en el formato de los datos:\n\n{error}",
+                parent=parent,
             )
             return False
 
     # =========================================================================
-    # 6. ENTRADA PRINCIPAL PARA ARCHIVOS EXTERNOS
+    # MÉTODOS DE GUARDADO (WRITE)
     # =========================================================================
+
     @classmethod
-    def cargar_json(cls, escenario, parent_window=None) -> bool:
-        ruta = cls.seleccionar_archivo_cargar(parent_window)
-        if not ruta:
+    def guardar_secuencia_inserciones(cls, *args, **kwargs) -> bool:
+        """Guarda los eventos del escenario actual en un archivo JSON."""
+        ruta_archivo, escenario, parent = cls._extraer_argumentos(args, kwargs)
+
+        if not escenario or not hasattr(escenario, "dict_eventos"):
+            messagebox.showwarning("Advertencia", "No hay eventos en el escenario para guardar.", parent=parent)
+            return False
+
+        if not ruta_archivo:
+            ruta_archivo = filedialog.asksaveasfilename(
+                title="Guardar Secuencia de Inserciones",
+                defaultextension=".json",
+                filetypes=[("Archivos JSON", "*.json"), ("Todos los archivos", "*.*")],
+                parent=parent,
+            )
+
+        if not ruta_archivo:
             return False
 
         try:
-            with open(ruta, "r", encoding="utf-8") as archivo:
-                cargado = json.load(archivo)
+            lista_eventos = list(escenario.dict_eventos.values())
+            datos_json = [cls.evento_a_dict(ev) for ev in lista_eventos]
 
-            if isinstance(cargado, list):
-                return cls.procesar_carga_por_inserciones(cargado, escenario, parent_window)
-            elif isinstance(cargado, dict):
-                return cls.procesar_carga_por_topologia(cargado, escenario, parent_window)
-            else:
-                messagebox.showerror("Error", "El formato del JSON no es una lista ni un objeto válido.", parent=parent_window)
-                return False
-        except Exception as e:
-            messagebox.showerror("Error de Lectura", f"No se pudo abrir o procesar el archivo:\n{e}", parent=parent_window)
+            with open(ruta_archivo, "w", encoding="utf-8") as f:
+                json.dump(datos_json, f, indent=2, ensure_ascii=False)
+
+            messagebox.showinfo("Éxito", f"Se guardaron {len(datos_json)} eventos correctamente.", parent=parent)
+            return True
+
+        except Exception as error:
+            print(f"Error al guardar inserciones: {error}")
+            messagebox.showerror("Error al Guardar", f"No se pudo guardar el archivo:\n{error}", parent=parent)
             return False
+
+    @classmethod
+    def guardar_escenario_completo(cls, *args, **kwargs) -> bool:
+        """Alias para guardar todo el estado del escenario actual en JSON."""
+        return cls.guardar_secuencia_inserciones(*args, **kwargs)
+
+    # =========================================================================
+    # AUXILIARES
+    # =========================================================================
+
+    @staticmethod
+    def _extraer_argumentos(args, kwargs) -> tuple:
+        ruta_archivo = None
+        escenario = None
+        parent = kwargs.get("parent_window") or kwargs.get("parent")
+
+        for arg in args:
+            if isinstance(arg, str):
+                ruta_archivo = arg
+            elif (
+                hasattr(arg, "dict_eventos")
+                or hasattr(arg, "arbol_avl")
+                or hasattr(arg, "zonas")
+                or hasattr(arg, "estaciones")
+            ):
+                escenario = arg
+
+        if not escenario and "escenario" in kwargs:
+            escenario = kwargs["escenario"]
+
+        return ruta_archivo, escenario, parent
+
+

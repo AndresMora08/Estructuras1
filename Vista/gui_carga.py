@@ -1,11 +1,8 @@
+from tkinter import messagebox
 from Logica.controlador_json import ControladorJSON
 
 
 class CargaMixin:
-
-    # ==================================================================
-    # CARGA POR INSERCIONES
-    # ==================================================================
 
     def _cargar_por_inserciones(self):
 
@@ -15,14 +12,18 @@ class CargaMixin:
         )
 
         if exito:
-
             self.actualizar_interfaz()
+            messagebox.showinfo(
+                "Carga exitosa",
+                "La carga por inserciones se realizó correctamente."
+            )
 
-            self.actualizar_tabla_eventos()
+    def _guardar_por_inserciones(self):
 
-    # ==================================================================
-    # CARGA POR TOPOLOGÍA
-    # ==================================================================
+        ControladorJSON.guardar_secuencia_inserciones(
+            self.escenario,
+            parent_window=self.root
+        )
 
     def _cargar_por_topologia(self):
 
@@ -32,17 +33,25 @@ class CargaMixin:
         )
 
         if exito:
-
             self.actualizar_interfaz()
+            messagebox.showinfo(
+                "Carga exitosa",
+                "La carga por topología se realizó correctamente."
+            )
 
-            self.actualizar_tabla_eventos()
+    def _guardar_por_topologia(self):
 
-    # ==================================================================
-    # ACTUALIZAR INTERFAZ
-    # ==================================================================
+        ControladorJSON.guardar_escenario_completo(
+            self.escenario,
+            parent_window=self.root
+        )
 
     def actualizar_interfaz(self):
 
         self.root.update_idletasks()
 
-        self.actualizar_tabla_eventos()
+        if hasattr(
+            self,
+            "actualizar_tabla_eventos"
+        ):
+            self.actualizar_tabla_eventos()

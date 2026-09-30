@@ -1,6 +1,7 @@
 from collections import deque
 from datetime import datetime as Datetime, datetime, timezone
 from typing import Dict, List, Optional, Tuple
+from copy import deepcopy
 
 from Modelos.AVL import AVL
 from Modelos.Epicentro import Epicentro
@@ -24,7 +25,7 @@ class Escenario:
         self.epicentros: List[Epicentro] = epicentros
 
         self.reloj = reloj if reloj is not None else datetime.now(timezone.utc)
-        self.arbol_avl = arbol_avl
+        self.arbol_avl = arbol_avl if arbol_avl is not None else AVL()
         self.cola_reportes = deque()
         self.historico: List[Evento] = []
         self.dict_eventos: Dict[int, Evento] = {}
@@ -33,6 +34,51 @@ class Escenario:
         self.R: float = 40.0
         self.L: int = 3
         self.T: float = 72.0
+
+        # Pila de historial para deshacer operaciones (JSON, borrados, etc.)
+        self.pila_deshacer = []
+
+    def guardar_estado_pila(self):
+        """Guarda un snapshot del estado actual antes de modificar el escenario."""
+        snapshot = {
+            "zonas": list(self.zonas),
+            "estaciones": list(self.estaciones),
+            "epicentros": list(self.epicentros),
+            "reloj": self.reloj,
+            "raiz_avl": deepcopy(self.arbol_avl.raiz) if self.arbol_avl else None,
+            "dict_eventos": dict(self.dict_eventos),
+            "cola_reportes": deque(self.cola_reportes),
+            "historico": list(self.historico),
+            "W": self.W,
+            "R": self.R,
+            "L": self.L,
+            "T": self.T
+        }
+        self.pila_deshacer.append(snapshot)
+
+    def deshacer_ultima_accion(self) -> bool:
+        """Restaura el estado del escenario a la versión anterior guardada en la pila."""
+        if not self.pila_deshacer:
+            return False
+
+        snapshot = self.pila_deshacer.pop()
+        self.zonas = snapshot["zonas"]
+        self.estaciones = snapshot["estaciones"]
+        self.epicentros = snapshot["epicentros"]
+        self.reloj = snapshot["reloj"]
+        
+        if not self.arbol_avl:
+            self.arbol_avl = AVL()
+        self.arbol_avl.raiz = snapshot["raiz_avl"]
+        
+        self.dict_eventos = snapshot["dict_eventos"]
+        self.cola_reportes = snapshot["cola_reportes"]
+        self.historico = snapshot["historico"]
+        self.W = snapshot["W"]
+        self.R = snapshot["R"]
+        self.L = snapshot["L"]
+        self.T = snapshot["T"]
+        return True
 
     def eliminar_evento_por_id(self, id_evento: int) -> Tuple[bool, str]:
         """
@@ -45,6 +91,8 @@ class Escenario:
         evento = self.dict_eventos[id_evento]
 
         try:
+            self.guardar_estado_pila()
+
             # 1. Eliminar del árbol AVL si está inicializado
             if self.arbol_avl and hasattr(evento, "clave"):
                 self.arbol_avl.eliminar(evento.clave, self.L)
@@ -65,7 +113,7 @@ class Escenario:
         """
         Verifica la rama del evento seleccionado. Si es archivable, elimina sus nodos del
         árbol mediante self.arbol_avl.eliminar(clave, L), traslada los eventos a self.historico
-        marcando su estado_catalogo = "Archivado" y guarda copia de respaldo para deshacer.
+        marcando su estado_catalogo = "Archivado".
         """
         if not self.arbol_avl or not self.arbol_avl.raiz:
             return False, "El árbol AVL no está inicializado o está vacío.", None
@@ -95,46 +143,25 @@ class Escenario:
             f"- Identificadores afectados: {ids_afectados}"
         )
 
-        # 4. Guardar respaldo previo para la acción de deshacer
-        self._respaldo_previo_archivo = {
-            "raiz_avl": self._clonar_arbol(self.arbol_avl.raiz),
-            "dict_eventos": dict(self.dict_eventos),
-            "historico": list(self.historico)
-        }
+        # 4. Guardar respaldo previo
+        self.guardar_estado_pila()
 
         # 5. Eliminar cada evento del subárbol usando eliminar(clave, limite_L)
         for ev in eventos_a_archivar:
-            # Eliminar del AVL activo por su clave
             self.arbol_avl.eliminar(ev.clave, self.L)
-            
-            # Remover de dict_eventos
             if ev.id in self.dict_eventos:
                 del self.dict_eventos[ev.id]
-            
-            # Cambiar su estado en el catálogo y transferir al histórico
             ev.estado_catalogo = "Archivado"
             self.historico.append(ev)
 
         return True, justificacion, ids_afectados
 
     def deshacer_ultimo_archivado(self):
-        """
-        Restablece el árbol AVL y el estado del escenario exactamente a cómo estaban
-        antes de ejecutar la última operación de archivado.
-        """
-        if hasattr(self, "_respaldo_previo_archivo") and self._respaldo_previo_archivo:
-            self.arbol_avl.raiz = self._respaldo_previo_archivo["raiz_avl"]
-            self.dict_eventos = self._respaldo_previo_archivo["dict_eventos"]
-            self.historico = self._respaldo_previo_archivo["historico"]
-            self.arbol_avl.actualizar_profundidades(self.L)
-            self._respaldo_previo_archivo = None
-            return True
-        return False
+        """Restablece el estado mediante la pila genérica."""
+        return self.deshacer_ultima_accion()
 
     def _clonar_arbol(self, raiz):
-        """Clona la estructura del árbol para poder deshacer cambios si el usuario cancela."""
+        """Clona la estructura del árbol."""
         if raiz is None:
             return None
-        from copy import deepcopy
-        nodo_clon = deepcopy(raiz)
-        return nodo_clon
+        return deepcopy(raiz)
