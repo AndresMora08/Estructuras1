@@ -1,8 +1,11 @@
-from tkinter import messagebox
 from Logica.controlador_json import ControladorJSON
 
 
 class CargaMixin:
+
+    # ==================================================================
+    # CARGA POR INSERCIONES
+    # ==================================================================
 
     def _cargar_por_inserciones(self):
 
@@ -12,18 +15,14 @@ class CargaMixin:
         )
 
         if exito:
+
             self.actualizar_interfaz()
-            messagebox.showinfo(
-                "Carga exitosa",
-                "La carga por inserciones se realizó correctamente."
-            )
 
-    def _guardar_por_inserciones(self):
+            self.actualizar_tabla_eventos()
 
-        ControladorJSON.guardar_secuencia_inserciones(
-            self.escenario,
-            parent_window=self.root
-        )
+    # ==================================================================
+    # CARGA POR TOPOLOGÍA
+    # ==================================================================
 
     def _cargar_por_topologia(self):
 
@@ -33,25 +32,35 @@ class CargaMixin:
         )
 
         if exito:
+
             self.actualizar_interfaz()
-            messagebox.showinfo(
-                "Carga exitosa",
-                "La carga por topología se realizó correctamente."
-            )
 
-    def _guardar_por_topologia(self):
+            self.actualizar_tabla_eventos()
 
+    # ==================================================================
+    # GUARDADO
+    # ==================================================================
+
+    def _guardar_topologia_json(self):
+        """Saves the full operational state (reloadable with 'Cargar Topología')."""
         ControladorJSON.guardar_escenario_completo(
             self.escenario,
             parent_window=self.root
         )
 
+    def _guardar_inserciones_json(self):
+        """Saves the active events (reloadable with 'Cargar Inserciones')."""
+        ControladorJSON.guardar_para_inserciones(
+            self.escenario,
+            parent_window=self.root
+        )
+
+    # ==================================================================
+    # ACTUALIZAR INTERFAZ
+    # ==================================================================
+
     def actualizar_interfaz(self):
 
         self.root.update_idletasks()
 
-        if hasattr(
-            self,
-            "actualizar_tabla_eventos"
-        ):
-            self.actualizar_tabla_eventos()
+        self.actualizar_tabla_eventos()

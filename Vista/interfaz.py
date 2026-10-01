@@ -53,10 +53,10 @@ class SismoLabGUI(
             ("Consultar Eventos", self._abrir_busqueda),
             ("Procesar Reportes", self.abrir_ventana_reportes),
             ("Cargar Inserciones", self._cargar_por_inserciones),
-            ("Guardar Inserciones", self._guardar_por_inserciones),
+            ("Guardar Inserciones", self._guardar_inserciones_json),
             ("Cargar Topología", self._cargar_por_topologia),
-            ("Guardar Topología", self._guardar_por_topologia),
-            ("↩️ Deshacer", self._deshacer_accion),
+            ("Guardar Topología", self._guardar_topologia_json),
+            ("Deshacer", self._deshacer_accion),
             ("Asociaciones", self.abrir_ventana_asociaciones),
         ]
 
