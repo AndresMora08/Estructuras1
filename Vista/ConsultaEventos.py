@@ -4,6 +4,7 @@ from tkinter import messagebox, ttk
 
 from Vista.VentanaCorreccionManual import VentanaCorreccionManual
 from Vista.VentanaEliminacionManual import VentanaEliminacionManual
+from Vista.VentanaConsultaAvanzado import VentanaConsultaAvanzado
 
 
 class ConsultaEventos:
@@ -17,7 +18,7 @@ class ConsultaEventos:
     ):
         self.ventana = tk.Toplevel(root)
         self.ventana.title("Consulta de Eventos")
-        self.ventana.geometry("520x500")
+        self.ventana.geometry("520x560")
 
         self.eventos = eventos
         self.arbol_avl = arbol_avl
@@ -49,7 +50,7 @@ class ConsultaEventos:
             "Profundidad",
             "Prioridad",
             "Clave AVL",
-            "Acceso Costoso",  # <-- Campo agregado a la lista de UI
+            "Acceso Costoso",
         ]
 
         for campo in campos:
@@ -85,13 +86,31 @@ class ConsultaEventos:
         )
         self.btn_eliminar.pack(side=tk.LEFT, padx=5)
 
-        # Botón para Archivar Rama Antigua (de la rama seleccionada)
         self.btn_archivar = ttk.Button(
             f_botones,
             text="Archivar Rama Antigua",
             command=self._procesar_archivado_rama,
         )
         self.btn_archivar.pack(side=tk.LEFT, padx=5)
+
+        # Botón para Consultas Avanzadas y Análisis de Desempeño
+        f_avanzado = ttk.Frame(self.ventana)
+        f_avanzado.pack(pady=10)
+
+        self.btn_avanzado = ttk.Button(
+            f_avanzado,
+            text="Consultas Avanzadas y Análisis de Desempeño",
+            command=self._abrir_consultas_avanzadas,
+        )
+        self.btn_avanzado.pack()
+
+    def _abrir_consultas_avanzadas(self):
+        VentanaConsultaAvanzado(
+            parent_window=self.ventana,
+            arbol_avl=self.arbol_avl,
+            escenario=self.escenario,
+            dict_eventos=self.eventos,
+        )
 
     def _procesar_busqueda(self):
         try:
@@ -107,7 +126,6 @@ class ConsultaEventos:
             self.evento_actual = self.eventos[num_id]
             ev = self.evento_actual
 
-            # Mapeo de datos para la interfaz
             datos = {
                 "ID": f"SIS-{ev.id:06d}",
                 "Estado": ev.estado,
@@ -125,7 +143,6 @@ class ConsultaEventos:
                 if clave in self.labels:
                     self.labels[clave].config(text=f"{clave}: {valor}")
 
-            # Habilitar botones
             self.btn_corregir.config(state="normal")
             self.btn_estado.config(state="normal")
             self.btn_eliminar.config(state="normal")
@@ -159,7 +176,7 @@ class ConsultaEventos:
                 evento_viejo=self.evento_actual,
                 arbol_avl=self.arbol_avl,
                 dict_eventos=self.eventos,
-                escenario=self.escenario,  # <-- PASAR EL ESCENARIO AQUÍ
+                escenario=self.escenario,
                 callback_refrescar=lambda: self._mostrar_evento(
                     self.evento_actual.id
                 ),
@@ -193,14 +210,12 @@ class ConsultaEventos:
 
         id_objetivo = self.evento_actual.id
 
-        # Intentar el archivado de la rama elegible por ID
         exito, justificacion, ids_afectados = self.escenario.archivar_evento_por_id(id_objetivo)
 
         if not exito:
             messagebox.showinfo("Información / No Elegible", justificacion, parent=self.ventana)
             return
 
-        # Muestra la justificación, cantidad e identificadores antes de aplicar permanentemente
         confirmar = messagebox.askyesno(
             "Confirmación de Archivado de Rama",
             f"{justificacion}\n\n¿Desea confirmar el archivado de este subárbol al histórico?",
@@ -208,7 +223,6 @@ class ConsultaEventos:
         )
 
         if not confirmar:
-            # Deshacer con una única acción si el usuario no confirma
             self.escenario.deshacer_ultimo_archivado()
             messagebox.showinfo(
                 "Cancelado",

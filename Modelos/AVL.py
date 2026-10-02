@@ -5,6 +5,8 @@ from Modelos.Nodo import Nodo
 from datetime import datetime as Datetime
 from datetime import datetime
 from datetime import timezone
+
+
 class AVL:
 
     def __init__(self, modo_estres: bool = False):
@@ -380,3 +382,124 @@ class AVL:
         )
 
         return candidatos[0]
+    
+    
+    def buscar_top_k_pendientes(self, k: int) -> tuple[list, int]:
+        eventos = []
+        nodos_visitados = [0]
+        if k <= 0 or self.raiz is None:
+         return eventos, 0
+        self._buscar_top_k_pendientes(self.raiz, k, eventos, nodos_visitados)
+        return eventos, nodos_visitados[0]
+
+    def _buscar_top_k_pendientes(self, raiz: Optional[Nodo], k: int, eventos: list, nodos_visitados: list[int]) -> None:
+      if raiz is None or len(eventos) >= k:
+        return
+
+      self._buscar_top_k_pendientes(raiz.derecha, k, eventos, nodos_visitados)
+
+      if len(eventos) < k:
+        nodos_visitados[0] += 1
+        if raiz.evento.estado == "Pendiente":
+            eventos.append(raiz.evento)
+
+      if len(eventos) < k:
+        self._buscar_top_k_pendientes(raiz.izquierda, k, eventos, nodos_visitados)
+        
+        
+    
+    def buscar_por_rango_magnitud(self, m_min: float, m_max: float) -> tuple[list, int]:
+        if m_min > m_max or self.raiz is None:
+         return [], 0
+
+        eventos = []
+        nodos_visitados = [0]
+
+        self._buscar_por_rango_magnitud(self.raiz, m_min, m_max, eventos, nodos_visitados)
+        return eventos, nodos_visitados[0]
+
+    def _buscar_por_rango_magnitud(
+    self, raiz: Optional[Nodo],m_min: float,m_max: float,eventos: list,nodos_visitados: list[int]) -> None:
+    
+     if raiz is None:
+        return
+
+     nodos_visitados[0] += 1
+     mag_actual = raiz.evento.magnitud
+
+     if mag_actual > m_min:
+        self._buscar_por_rango_magnitud(raiz.izquierda, m_min, m_max, eventos, nodos_visitados)
+
+     if m_min <= mag_actual <= m_max:
+        eventos.append(raiz.evento)
+
+     if mag_actual < m_max:
+         self._buscar_por_rango_magnitud(raiz.derecha, m_min, m_max, eventos, nodos_visitados)
+         
+    def buscar_por_fecha_y_profundidad(self, fecha_inicio: str, fecha_fin: str, profundidad_limite: float) -> tuple[list, int]:
+     if fecha_inicio > fecha_fin or profundidad_limite < 0.0 or self.raiz is None:
+        return [], 0
+
+     eventos = []
+     nodos_visitados = [0]
+
+     self._buscar_por_fecha_y_profundidad(
+     self.raiz, fecha_inicio, fecha_fin, profundidad_limite, eventos, nodos_visitados)
+     return eventos, nodos_visitados[0]
+
+    def _buscar_por_fecha_y_profundidad(self,raiz: Optional[Nodo], fecha_inicio: str,fecha_fin: str,profundidad_limite: float,eventos: list,nodos_visitados: list[int]) -> None:
+     if raiz is None:
+        return
+
+     nodos_visitados[0] += 1
+    
+     self._buscar_por_fecha_y_profundidad(
+        raiz.izquierda, fecha_inicio, fecha_fin, profundidad_limite, eventos, nodos_visitados
+     )
+
+     evento = raiz.evento
+     if fecha_inicio <= evento.fecha_hora <= fecha_fin and evento.profundidad <= profundidad_limite:
+        eventos.append(evento)
+
+     self._buscar_por_fecha_y_profundidad(
+        raiz.derecha, fecha_inicio, fecha_fin, profundidad_limite, eventos, nodos_visitados
+    )
+     
+    
+    def buscar_eventos_prioritarios_costosos(self, limite_L: int) -> tuple[list[dict], int]:
+     if limite_L < 0 or self.raiz is None:
+         return [], 0
+
+     eventos_costosos = []
+     nodos_visitados = [0]
+
+     self._buscar_eventos_prioritarios_costosos(
+     self.raiz, 0, limite_L, eventos_costosos, nodos_visitados
+    )
+
+     return eventos_costosos, nodos_visitados[0]
+
+
+    def _buscar_eventos_prioritarios_costosos( self, raiz: Optional[Nodo], profundidad_actual: int, limite_L: int, eventos_costosos: list[dict],   nodos_visitados: list[int]) -> None:
+     if raiz is None:
+        return
+
+     nodos_visitados[0] += 1
+
+     self._buscar_eventos_prioritarios_costosos(
+        raiz.izquierda, profundidad_actual + 1, limite_L, eventos_costosos, nodos_visitados
+    )
+
+     if profundidad_actual > limite_L:
+        evento = raiz.evento
+        if evento.acceso_costoso:
+            eventos_costosos.append({
+                "evento": evento,
+                "profundidad_nodo": profundidad_actual,
+                "limite_L": limite_L,
+                "nodos_visitados_busqueda": profundidad_actual + 1
+            })
+
+     self._buscar_eventos_prioritarios_costosos(
+        raiz.derecha, profundidad_actual + 1, limite_L, eventos_costosos, nodos_visitados
+    )
