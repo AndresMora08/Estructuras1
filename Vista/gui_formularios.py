@@ -7,6 +7,8 @@ from Modelos.Evento import Evento
 from Modelos.Nodo import Nodo
 from Modelos.Zona import Zona
 from datetime import datetime, timezone
+from Modelos.Asociaciones import recalcular_asociaciones_escenario
+
 
 class FormulariosMixin:
 
@@ -829,8 +831,6 @@ class FormulariosMixin:
                 id_evt
             ] = nuevo_evento
 
-
-
             # ----------------------------------------------------------
             # AVL
             # ----------------------------------------------------------
@@ -849,6 +849,12 @@ class FormulariosMixin:
                     ),
                     self.escenario.L
                 )
+
+            # --- NUEVO: Recalcular asociaciones tras una nueva alta ---
+            W_actual = getattr(self.escenario, "W", 48.0)
+            R_actual = getattr(self.escenario, "R", 40.0)
+            recalcular_asociaciones_escenario(self.escenario, W_actual, R_actual)
+            # ----------------------------------------------------------
 
             # ----------------------------------------------------------
             # ACTUALIZAR TABLA
