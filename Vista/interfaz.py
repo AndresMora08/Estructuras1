@@ -7,7 +7,7 @@ from Vista.gui_carga import CargaMixin
 from Vista.gui_eventos import EventosMixin
 from Vista.gui_formularios import FormulariosMixin
 from Vista.VentanaReportes import VentanaReportes
-
+from Vista.Mapa import Mapa
 
 class SismoLabGUI(
     FormulariosMixin,
@@ -58,6 +58,7 @@ class SismoLabGUI(
             ("Guardar Topología", self._guardar_topologia_json),
             ("Deshacer", self._deshacer_accion),
             ("Asociaciones", self.abrir_ventana_asociaciones),
+            ("Plano Geográfico", self.abrir_plano_geografico),
         ]
 
         for texto, comando in botones:
@@ -101,3 +102,6 @@ class SismoLabGUI(
                 "No hay acciones previas para deshacer.",
                 parent=self.root
             )
+    def abrir_plano_geografico(self):
+        """Abre la ventana del mapa geográfico."""
+        Mapa(self.root, self.escenario)

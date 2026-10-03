@@ -26,6 +26,7 @@ class Epicentro:
             self.zona = zona_poblada
         else:
             self.zona = coincidentes[0]
+        print(f"Epicentro en ({self.x}, {self.y}) asignado a zona: {self.zona.nombre}")
 
     @property
     def es_poblada(self) -> bool:
