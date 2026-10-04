@@ -13,20 +13,11 @@ TOLERANCIA = 1e-6
 
 
 class ControladorReportes:
-    """
-    Business logic for the report queue (FIFO), the report processing rules
-    (section 6), the stress mode and the global recovery (section 8).
-    It never touches the GUI. It only uses the public API of the models.
-    """
 
     def __init__(self, escenario):
         self.escenario = escenario
-
-        # Optional hook: a callable(id_evento) that recalculates associations.
-        # The GUI/other modules can assign it; it is called after every accepted change.
         self.actualizar_asociaciones = None
 
-        # Counters kept in the scenario so they survive closing the reports window
         if not hasattr(escenario, "metricas_reportes"):
             escenario.metricas_reportes = {
                 "nuevos": 0,
@@ -47,25 +38,23 @@ class ControladorReportes:
     def parsear_fecha_utc(texto: str) -> Optional[datetime]:
         """Parses 'YYYY-MM-DDTHH:MM:SSZ' into an aware UTC datetime (None if invalid)."""
         try:
-            return datetime.strptime(str(texto).strip(), FORMATO_FECHA_ISO).replace(
-                tzinfo=timezone.utc
-            )
+            return datetime.strptime(str(texto).strip(), FORMATO_FECHA_ISO).replace(tzinfo=timezone.utc)
         except ValueError:
             return None
 
     def _reloj_utc(self) -> datetime:
-     reloj = self.escenario.reloj
-     if reloj.tzinfo is None:
+        reloj = self.escenario.reloj
+        if reloj.tzinfo is None:
             reloj = reloj.replace(tzinfo=timezone.utc)
-     return reloj.replace(microsecond=0)
- 
+        return reloj.replace(microsecond=0)
+
     @staticmethod
     def _tiene_maximo_un_decimal(valor: float) -> bool:
         return abs(valor * 10 - round(valor * 10)) < TOLERANCIA
-    
+
     def obtener_reloj_texto(self) -> str:
-            """Simulation clock as ISO 8601 UTC text (same format as event dates)."""
-            return self._reloj_utc().strftime(FORMATO_FECHA_ISO)
+        """Simulation clock as ISO 8601 UTC text (same format as event dates)."""
+        return self._reloj_utc().strftime(FORMATO_FECHA_ISO)
 
     def avanzar_reloj(self, horas: float) -> Tuple[bool, str]:
         """Advances the simulation clock. It can only move forward."""
@@ -73,9 +62,8 @@ class ControladorReportes:
             return False, "El avance debe ser mayor que 0 horas."
         self.escenario.reloj = self._reloj_utc() + timedelta(hours=horas)
         return True, f"Reloj avanzado {horas} h. Nuevo reloj: {self.obtener_reloj_texto()}."
-    def _validar_rangos(
-        self, id_evento, magnitud, profundidad, x, y, fecha: Optional[datetime]
-    ) -> Tuple[bool, str]:
+
+    def _validar_rangos(self, id_evento, magnitud, profundidad, x, y, fecha: Optional[datetime]) -> Tuple[bool, str]:
         if not (1 <= id_evento <= 999999):
             return False, "El identificador debe estar entre 1 y 999999."
         if not (-2.0 <= magnitud <= 10.0):
@@ -88,22 +76,16 @@ class ControladorReportes:
             return False, "La fecha debe tener formato ISO 8601 UTC (ej. 2026-09-07T10:00:00Z)."
         if fecha > self._reloj_utc():
             return False, (
-                "La fecha de ocurrencia no puede ser posterior al reloj de simulación "
-                f"({self.obtener_reloj_texto()}). Avance el reloj o use una fecha anterior."
+                "La fecha de ocurrencia no puede ser posterior al reloj "
+                "de simulación "
+                f"({self.obtener_reloj_texto()}). "
+                "Avance el reloj o use una fecha anterior."
             )
         return True, "OK"
 
-    def crear_evento_reportado(
-        self,
-        id_evento: int,
-        magnitud: float,
-        profundidad: float,
-        x: float,
-        y: float,
-        fecha_texto: str,
-        estacion: Optional[Estacion],
-        revision: int,
-    ) -> Tuple[bool, str, Optional[Evento]]:
+    def crear_evento_reportado(self, id_evento: int, magnitud: float, profundidad: float,
+                               x: float, y: float, fecha_texto: str,
+                               estacion: Optional[Estacion], revision: int) -> Tuple[bool, str, Optional[Evento]]:
         """
         Validates the raw values typed by the user and builds a NEW Evento with the
         proposed data (the base event is never touched here).
@@ -113,12 +95,8 @@ class ControladorReportes:
         if revision < 1:
             return False, "La revisión debe ser un entero positivo.", None
 
-        for nombre, valor in (
-            ("magnitud", magnitud),
-            ("profundidad", profundidad),
-            ("coordenada X", x),
-            ("coordenada Y", y),
-        ):
+        for nombre, valor in (("magnitud", magnitud), ("profundidad", profundidad),
+                              ("coordenada X", x), ("coordenada Y", y)):
             if not self._tiene_maximo_un_decimal(valor):
                 return False, f"La {nombre} admite máximo un decimal.", None
 
@@ -127,15 +105,11 @@ class ControladorReportes:
         if not valido:
             return False, mensaje, None
 
-        epicentro = Epicentro(x, y, self.escenario.zonas)  # assigns the zone -> priority
+        epicentro = Epicentro(x, y, self.escenario.zonas)
         evento = Evento(
-            id_evento=id_evento,
-            magnitud=magnitud,
-            profundidad=profundidad,
-            epicentro=epicentro,
-            estacion_origen=estacion,
-            fecha_hora=fecha.strftime(FORMATO_FECHA_ISO),
-            revision=revision,
+            id_evento=id_evento, magnitud=magnitud, profundidad=profundidad,
+            epicentro=epicentro, estacion_origen=estacion,
+            fecha_hora=fecha.strftime(FORMATO_FECHA_ISO), revision=revision
         )
         return True, "OK", evento
 
@@ -144,26 +118,23 @@ class ControladorReportes:
         if not evento.epicentro:
             return False, "El evento debe contener un epicentro válido."
         return self._validar_rangos(
-            evento.id,
-            evento.magnitud,
-            evento.profundidad,
-            evento.epicentro.x,
-            evento.epicentro.y,
-            self.parsear_fecha_utc(evento.fecha_hora),
+            evento.id, evento.magnitud, evento.profundidad,
+            evento.epicentro.x, evento.epicentro.y,
+            self.parsear_fecha_utc(evento.fecha_hora)
         )
 
     # ==================================================================
     # QUEUE (FIFO): append = O(1), popleft = O(1)
     # ==================================================================
 
-    def encolar_reporte(
-        self, evento: Evento, estacion_emisora: Estacion, revision: int
-    ) -> Tuple[bool, str]:
+    def encolar_reporte(self, evento: Evento, estacion_emisora: Estacion,
+                        revision: int) -> Tuple[bool, str]:
         """Validation step: only valid reports enter the FIFO queue."""
         if estacion_emisora is None:
             return False, "El reporte necesita una estación emisora."
         if int(revision) < 1:
             return False, "La revisión debe ser un entero positivo."
+
         valido, mensaje = self.validar_evento(evento)
         if not valido:
             return False, mensaje
@@ -219,8 +190,7 @@ class ControladorReportes:
             and abs(evento_a.profundidad - evento_b.profundidad) < TOLERANCIA
             and abs(evento_a.epicentro.x - evento_b.epicentro.x) < TOLERANCIA
             and abs(evento_a.epicentro.y - evento_b.epicentro.y) < TOLERANCIA
-            and fecha_a is not None
-            and fecha_a == fecha_b
+            and fecha_a is not None and fecha_a == fecha_b
         )
 
     def _notificar_asociaciones(self, id_evento: int) -> None:
@@ -262,9 +232,9 @@ class ControladorReportes:
         vigente.epicentro = reportado.epicentro
         vigente.fecha_hora = reportado.fecha_hora
         vigente.revision = revision
-        vigente.estado = "Pendiente"  # an accepted correction returns to pending
+        vigente.estado = "Pendiente"
         self._agregar_estacion(vigente, id_estacion)
-        vigente.calcular_prioridad()  # recomputes priority and key (P, M, I)
+        vigente.calcular_prioridad()
 
     @staticmethod
     def _resultado(base: dict, resultado: str, detalle: str, **extra) -> dict:
@@ -290,7 +260,6 @@ class ControladorReportes:
 
         reporte = cola.popleft()
         rotaciones_previas = self._copiar_rotaciones()
-
         try:
             resultado = self._aplicar_reporte(reporte)
         except Exception as error:
@@ -314,16 +283,14 @@ class ControladorReportes:
         id_evento = evento_reportado.id
         id_estacion = self._obtener_id_estacion(reporte.estacion_emisora)
         base = {"id_evento": id_evento, "revision": revision, "estacion": id_estacion}
-
         evento_historico = self._buscar_en_historico(id_evento)
 
         # Removed (deleted) identifiers are rejected
         if evento_historico is not None and evento_historico.estado_catalogo == "Retirado":
             self.metricas["rechazados_retirados"] += 1
             return self._resultado(
-                base,
-                "RECHAZADO (RETIRADO)",
-                f"SIS-{id_evento:06d} fue eliminado. Sus reportes se rechazan hasta deshacer la eliminación.",
+                base, "RECHAZADO (RETIRADO)",
+                f"SIS-{id_evento:06d} fue eliminado. Sus reportes se rechazan hasta deshacer la eliminación."
             )
 
         evento_activo = escenario.dict_eventos.get(id_evento)
@@ -356,18 +323,15 @@ class ControladorReportes:
 
             self.metricas["conflictos"] += 1
             return self._resultado(
-                base,
-                "CONFLICTO (RECHAZADO)",
-                f"Con la misma revisión r{revision} los datos difieren de los vigentes. "
-                "Reporte rechazado sin sobrescribir el evento.",
+                base, "CONFLICTO (RECHAZADO)",
+                f"Con la misma revisión r{revision} los datos difieren de los vigentes. Reporte rechazado sin sobrescribir el evento."
             )
 
         # Situation 5: lower revision
         self.metricas["descartados_antiguos"] += 1
         return self._resultado(
-            base,
-            "DESCARTADO (ANTIGUO)",
-            f"Reporte antiguo (r{revision}); la revisión vigente es r{vigente.revision}. Evento sin cambios.",
+            base, "DESCARTADO (ANTIGUO)",
+            f"Reporte antiguo (r{revision}); la revisión vigente es r{vigente.revision}. Evento sin cambios."
         )
 
     # ------------------------------------------------------------------
@@ -377,14 +341,13 @@ class ControladorReportes:
     def _registrar_evento_nuevo(self, base, reportado: Evento, revision, id_estacion) -> dict:
         arbol = self._obtener_arbol()
         limite_L = self.escenario.L
-
         reportado.revision = revision
         reportado.estado = "Pendiente"
         reportado.estado_catalogo = "Activo"
         reportado.calcular_prioridad()
         self._agregar_estacion(reportado, id_estacion)
-
         self.escenario.dict_eventos[reportado.id] = reportado
+
         try:
             arbol.insertar(Nodo(evento=reportado), limite_L)
         except Exception:
@@ -394,65 +357,62 @@ class ControladorReportes:
         self.metricas["nuevos"] += 1
         self._notificar_asociaciones(reportado.id)
         return self._resultado(
-            base,
-            "REGISTRADO (NUEVO)",
-            f"Evento nuevo con revisión inicial r{revision}. Prioridad {reportado.prioridad}, "
-            f"clave {reportado.clave}.",
-            clave_nueva=reportado.clave,
+            base, "REGISTRADO (NUEVO)",
+            f"Evento nuevo con revisión inicial r{revision}. Prioridad {reportado.prioridad}, clave {reportado.clave}.",
+            clave_nueva=reportado.clave
         )
 
     def _corregir_evento_activo(self, base, vigente: Evento, reportado: Evento, revision, id_estacion) -> dict:
         arbol = self._obtener_arbol()
         limite_L = self.escenario.L
-
         clave_anterior = vigente.clave
-        clave_nueva = reportado.clave  # (P, M, I) derived from the reported data
+        clave_nueva = reportado.clave
         datos_previos = self._capturar_datos(vigente)
 
         if clave_anterior == clave_nueva:
             # Same key: the node keeps its position, only data/revision change
             self._sustituir_datos(vigente, reportado, revision, id_estacion)
             detalle = (
-                f"Datos actualizados a r{revision}. La clave {clave_nueva} no cambió: "
+                f"Datos actualizados a r{revision}. "
+                f"La clave {clave_nueva} no cambió: "
                 "no se elimina ni reinserta el nodo."
             )
         else:
             if arbol.buscar(clave_anterior) is None:
                 raise ValueError("El evento activo no se encontró en el AVL con su clave anterior.")
 
-            arbol.eliminar(clave_anterior, limite_L)  # remove with the OLD key
+            arbol.eliminar(clave_anterior, limite_L)
             try:
                 self._sustituir_datos(vigente, reportado, revision, id_estacion)
-                arbol.insertar(Nodo(evento=vigente), limite_L)  # reinsert with the NEW key
+                arbol.insertar(Nodo(evento=vigente), limite_L)
             except Exception:
                 self._restaurar_datos(vigente, datos_previos)
                 if arbol.buscar(clave_anterior) is None:
                     arbol.insertar(Nodo(evento=vigente), limite_L)
                 raise
+
             detalle = (
-                f"Datos actualizados a r{revision}. Clave {clave_anterior} -> {clave_nueva}: "
+                f"Datos actualizados a r{revision}. "
+                f"Clave {clave_anterior} -> {clave_nueva}: "
                 "nodo retirado y reinsertado."
             )
 
         self.metricas["correcciones_aceptadas"] += 1
         self._notificar_asociaciones(vigente.id)
         return self._resultado(
-            base,
-            "SUSTITUIDO (CORRECCIÓN)",
-            detalle,
-            clave_anterior=clave_anterior,
-            clave_nueva=vigente.clave,
+            base, "SUSTITUIDO (CORRECCIÓN)", detalle,
+            clave_anterior=clave_anterior, clave_nueva=vigente.clave
         )
 
     def _reactivar_evento_archivado(self, base, archivado: Evento, reportado: Evento, revision, id_estacion) -> dict:
         arbol = self._obtener_arbol()
         limite_L = self.escenario.L
         datos_previos = self._capturar_datos(archivado)
-
         self._sustituir_datos(archivado, reportado, revision, id_estacion)
         archivado.estado_catalogo = "Activo"
         self.escenario.historico.remove(archivado)
         self.escenario.dict_eventos[archivado.id] = archivado
+
         try:
             arbol.insertar(Nodo(evento=archivado), limite_L)
         except Exception:
@@ -464,11 +424,9 @@ class ControladorReportes:
         self.metricas["reactivados"] += 1
         self._notificar_asociaciones(archivado.id)
         return self._resultado(
-            base,
-            "REACTIVADO (ARCHIVADO -> ACTIVO)",
-            f"Revisión r{revision} mayor que la archivada: evento reactivado como pendiente "
-            f"con clave {archivado.clave}.",
-            clave_nueva=archivado.clave,
+            base, "REACTIVADO (ARCHIVADO -> ACTIVO)",
+            f"Revisión r{revision} mayor que la archivada: evento reactivado como pendiente con clave {archivado.clave}.",
+            clave_nueva=archivado.clave
         )
 
     # ==================================================================
@@ -497,15 +455,18 @@ class ControladorReportes:
         def visitar(nodo, minimo, maximo) -> int:
             if nodo is None:
                 return 0
+
             total[0] += 1
             evento = nodo.evento
             clave = evento.clave
 
             if (minimo is not None and clave <= minimo) or (maximo is not None and clave >= maximo):
                 errores_orden.append(f"SIS-{evento.id:06d}: clave {clave} viola el orden BST global.")
+
             if evento.id in ids_vistos:
                 errores_metadatos.append(f"SIS-{evento.id:06d}: aparece en más de una posición.")
             ids_vistos.add(evento.id)
+
             if evento.id not in self.escenario.dict_eventos:
                 errores_metadatos.append(f"SIS-{evento.id:06d}: está en el AVL pero no en dict_eventos.")
 
@@ -517,6 +478,7 @@ class ControladorReportes:
                 errores_metadatos.append(
                     f"SIS-{evento.id:06d}: altura almacenada {nodo.altura} != recalculada {altura_real}."
                 )
+
             factor = altura_izq - altura_der
             if abs(factor) > 1:
                 desbalanceados.append((evento.id, factor))
@@ -547,13 +509,12 @@ class ControladorReportes:
         arbol = self._obtener_arbol()
         auditoria_previa = self.auditar_arbol()
         rotaciones_previas = self._copiar_rotaciones()
-
         arbol.recuperar_equilibrio(self.escenario.L)
-
         auditoria_final = self.auditar_arbol()
         confirmado = auditoria_final["balanceado"] and auditoria_final["orden_ok"]
+
         if not confirmado:
-            arbol.modo_estres = True  # audit failed: stay in stress mode
+            arbol.modo_estres = True
 
         return {
             "confirmado": confirmado,
@@ -573,33 +534,58 @@ class ControladorReportes:
         return desde
 
     def generar_rafaga_demostracion(self) -> Tuple[bool, str]:
+        # ESTACIONES
         estaciones = list(self.escenario.estaciones)
         if not estaciones:
             return False, "Se necesita al menos una estación para generar la ráfaga."
+
+        # EPICENTROS
+        epicentros = [epicentro for epicentro in self.escenario.epicentros if epicentro is not None]
+        if not epicentros:
+            return False, "Debe crear al menos un epicentro antes de generar la ráfaga de reportes de prueba."
 
         id_a = self._siguiente_id_libre(900001)
         id_b = self._siguiente_id_libre(id_a + 1)
         fecha = (self._reloj_utc() - timedelta(hours=2)).strftime(FORMATO_FECHA_ISO)
 
-        # (id, revision, magnitude, depth, x, y)
+        # (id, revision, magnitude, depth)
         plan = [
-            (id_a, 1, 6.5, 10.0, 500.0, 500.0),  # new high-priority event
-            (id_a, 1, 6.5, 10.0, 500.0, 500.0),  # confirmation from another station
-            (id_b, 1, 4.6, 20.0, 300.0, 300.0),  # another new event
-            (id_a, 2, 4.8, 70.0, 500.0, 500.0),  # correction that changes the key
-            (id_a, 1, 6.5, 10.0, 500.0, 500.0),  # old report (lower revision)
-            (id_a, 2, 5.9, 70.0, 500.0, 500.0),  # conflict (same revision, other data)
+            (id_a, 1, 6.5, 10.0),  # new high-priority event
+            (id_a, 1, 6.5, 10.0),  # confirmation from another station
+            (id_b, 1, 4.6, 20.0),   # another new event
+            (id_a, 2, 4.8, 70.0),   # correction that changes the key
+            (id_a, 1, 6.5, 10.0),  # old report (lower revision)
+            (id_a, 2, 5.9, 70.0),  # conflict (same revision, other data)
         ]
+
         reportes = []
-        for indice, (id_evento, revision, mag, prof, x, y) in enumerate(plan):
+        epicentros_por_evento = {}
+
+        for indice, (id_evento, revision, mag, prof) in enumerate(plan):
             estacion = estaciones[indice % len(estaciones)]
+
+            if id_evento not in epicentros_por_evento:
+                indice_epicentro = len(epicentros_por_evento) % len(epicentros)
+                epicentros_por_evento[id_evento] = epicentros[indice_epicentro]
+
+            epicentro = epicentros_por_evento[id_evento]
             valido, mensaje, evento = self.crear_evento_reportado(
-                id_evento, mag, prof, x, y, fecha, estacion, revision
+                id_evento, mag, prof, epicentro.x, epicentro.y,
+                fecha, estacion, revision
             )
             if not valido:
                 return False, mensaje
+
+            # Utiliza el Epicentro real que ya existe en el escenario.
+            evento.epicentro = epicentro
+            evento.calcular_prioridad()
             reportes.append((evento, estacion, revision))
 
+        # Mantener exactamente el mismo comportamiento FIFO.
         for evento, estacion, revision in reportes:
             self.encolar_reporte(evento, estacion, revision)
-        return True, f"Ráfaga de {len(reportes)} reportes encolada (eventos SIS-{id_a:06d} y SIS-{id_b:06d})."
+
+        return True, (
+            f"Ráfaga de {len(reportes)} reportes encolada "
+            f"(eventos SIS-{id_a:06d} y SIS-{id_b:06d})."
+        )

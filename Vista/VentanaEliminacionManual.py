@@ -47,18 +47,7 @@ class VentanaEliminacionManual:
         )
         btn_eliminar.pack(fill=tk.X, pady=8)
 
-        # 2. BOTÓN GUARDAR JSON
-        btn_guardar = ttk.Button(
-            f_acciones, text="💾 Guardar Escenario en JSON", command=self.guardar_json
-        )
-        btn_guardar.pack(fill=tk.X, pady=8)
-
-        # 3. BOTÓN CARGAR JSON
-        btn_cargar = ttk.Button(
-            f_acciones, text="📂 Cargar desde JSON", command=self.cargar_json
-        )
-        btn_cargar.pack(fill=tk.X, pady=8)
-
+      
         # Botón inferior para cerrar
         ttk.Button(
             self.ventana, text="Cancelar", command=self.ventana.destroy
@@ -93,13 +82,4 @@ class VentanaEliminacionManual:
         else:
             messagebox.showerror("Error", mensaje, parent=self.ventana)
 
-    def guardar_json(self):
-        """Delega la serialización completa al ControladorJSON."""
-        ControladorJSON.guardar_escenario_completo(self.escenario, parent_window=self.ventana)
-
-    def cargar_json(self):
-        """Delega la lectura y reconstrucción atómica al ControladorJSON."""
-        exito = ControladorJSON.cargar_json(self.escenario, parent_window=self.ventana)
-        if exito:
-            self.callback_al_eliminar()
-            self.ventana.destroy()
+  
