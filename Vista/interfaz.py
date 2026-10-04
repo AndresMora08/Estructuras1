@@ -46,7 +46,6 @@ class SismoLabGUI(
         f_botones.pack(pady=15)
 
         # Definición de categorías y sus opciones internas
-       # Definición de categorías y sus opciones internas
         self.categorias = {
             "Crear": [
                 ("Crear Zona", self._abrir_formulario_zona),

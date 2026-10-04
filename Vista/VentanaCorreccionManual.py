@@ -4,6 +4,7 @@ from tkinter import messagebox, ttk
 from Logica.control_correcciones import ControladorCorrecciones
 from Modelos.Epicentro import Epicentro
 from Modelos.Evento import Evento
+from Modelos.Asociaciones import recalcular_asociaciones_escenario
 
 
 class VentanaCorreccionManual:
@@ -118,6 +119,12 @@ class VentanaCorreccionManual:
         )
 
         if exito:
+            # --- NUEVO: Recalcular asociaciones en cascada tras corregir ---
+            W_actual = getattr(self.controlador.escenario, "W", 48.0)
+            R_actual = getattr(self.controlador.escenario, "R", 40.0)
+            recalcular_asociaciones_escenario(self.controlador.escenario, W_actual, R_actual)
+            # ---------------------------------------------------------------
+
             messagebox.showinfo(
                 "Corrección Exitosa",
                 f"Evento SIS-{self.evento_viejo.id:06d} actualizado a la revisión"

@@ -47,6 +47,9 @@ class Escenario:
             "conflictos": 0,
             "descartados_antiguos": 0,
             "rechazados_retirados": 0,
+            # --- NUEVO PARA PUNTO 14 ---
+            "archivos_masivos": 0,
+            "eventos_archivados": 0,
         }
 
         # Pila de retroceso en memoria
@@ -60,11 +63,6 @@ class Escenario:
     # PILA DE RETROCESO (DESHACER COMPLETO)
     # =========================================================================
     def guardar_estado_pila(self):
-        """
-        Guarda un snapshot completo del estado operativo antes de ejecutar cualquier
-        acción que altere el escenario (altas, eliminaciones, avances de reloj,
-        cambios de atención, pasos de la cola, cargas, etc.).
-        """
         snapshot = {
             "zonas": deepcopy(self.zonas),
             "estaciones": deepcopy(self.estaciones),
@@ -84,10 +82,6 @@ class Escenario:
         self.pila_deshacer.append(snapshot)
 
     def deshacer_ultima_accion(self) -> bool:
-        """
-        Recupera el estado anterior exacto desde la pila de retroceso, restaurando
-        datos, histórico, referencias, cola, reloj, parámetros, modo y métricas.
-        """
         if not self.pila_deshacer:
             return False
 
@@ -119,10 +113,6 @@ class Escenario:
     # VERSIONES PERSISTENTES CON NOMBRE (DISCO)
     # =========================================================================
     def guardar_version_persistente(self, nombre_version: str) -> Tuple[bool, str]:
-        """
-        Guarda una versión persistente con nombre en el disco.
-        Aprovecha la serialización completa de ControladorJSON sin modificarlo.
-        """
         nombre_limpio = "".join(c for c in nombre_version if c.isalnum() or c in (" ", "_", "-")).strip()
         if not nombre_limpio:
             return False, "Nombre de versión no válido."
@@ -130,7 +120,6 @@ class Escenario:
         ruta_archivo = os.path.join(self.carpeta_versiones, f"{nombre_limpio}.json")
 
         try:
-            # Reutiliza el método de serialización estándar del controlador JSON
             datos = ControladorJSON.construir_diccionario_topologia(self)
             ControladorJSON._escribir_json_atomico(ruta_archivo, datos)
             return True, f"Versión '{nombre_limpio}' guardada exitosamente."
@@ -138,18 +127,12 @@ class Escenario:
             return False, f"Error al guardar la versión persistente: {str(e)}"
 
     def listar_versiones_persistentes(self) -> List[str]:
-        """Retorna los nombres de las versiones guardadas en disco."""
         if not os.path.exists(self.carpeta_versiones):
             return []
         archivos = os.listdir(self.carpeta_versiones)
         return [os.path.splitext(f)[0] for f in archivos if f.endswith(".json")]
 
     def restaurar_version_persistente(self, nombre_version: str) -> Tuple[bool, str]:
-        """
-        Restaura una versión guardada en disco.
-        REGLA DEL PUNTO 13: Restaurar una versión es una acción que puede deshacerse,
-        por lo que se apila la situación actual ANTES de aplicar los cambios.
-        """
         ruta_archivo = os.path.join(self.carpeta_versiones, f"{nombre_version}.json")
         if not os.path.exists(ruta_archivo):
             return False, f"La versión '{nombre_version}' no existe."
@@ -158,15 +141,11 @@ class Escenario:
             with open(ruta_archivo, "r", encoding="utf-8") as f:
                 datos = json.load(f)
 
-            # Validar la topología usando las rutinas sin modificar del controlador
             estado_nuevo, errores, _ = ControladorJSON.validar_topologia(datos, self)
             if errores:
                 return False, f"Error al validar el archivo de la versión:\n" + "\n".join(errores)
 
-            # 1. Se registra en la pila para que la restauración sea deshacible
             self.guardar_estado_pila()
-
-            # 2. Se aplican los datos restaurados en el escenario
             ControladorJSON._aplicar_estado(self, estado_nuevo)
 
             return True, f"Versión '{nombre_version}' restaurada exitosamente."
@@ -174,13 +153,9 @@ class Escenario:
             return False, f"Error al restaurar la versión: {str(e)}"
 
     # =========================================================================
-    # MÉTODOS DE OPERACIÓN (TODOS GUARDAN ESTADO EN PILA ANTES DE MODIFICAR)
+    # MÉTODOS DE OPERACIÓN
     # =========================================================================
     def registrar_accion_operativa(self, funcion_modificadora, *args, **kwargs):
-        """
-        Wrapper auxiliar para garantizar que cualquier alta, cambio de parámetros,
-        cambio de atención, avance de reloj, etc., sea registrado en la pila antes de ejecutarse.
-        """
         self.guardar_estado_pila()
         return funcion_modificadora(*args, **kwargs)
 
@@ -236,5 +211,9 @@ class Escenario:
                 del self.dict_eventos[ev.id]
             ev.estado_catalogo = "Archivado"
             self.historico.append(ev)
+
+        # --- NUEVO PARA PUNTO 14 ---
+        self.metricas_reportes["archivos_masivos"] += 1
+        self.metricas_reportes["eventos_archivados"] += cant_nodos
 
         return True, justificacion, ids_afectados

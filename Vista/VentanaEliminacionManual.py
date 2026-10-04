@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Callable, Dict, Optional
 from Logica.controlador_json import ControladorJSON
+from Modelos.Asociaciones import recalcular_asociaciones_escenario
 
 
 class VentanaEliminacionManual:
@@ -80,6 +81,12 @@ class VentanaEliminacionManual:
         exito, mensaje = self.escenario.eliminar_evento_por_id(id_evt)
 
         if exito:
+            # --- NUEVO: Recalcular asociaciones tras eliminar ---
+            W_actual = getattr(self.escenario, "W", 48.0)
+            R_actual = getattr(self.escenario, "R", 40.0)
+            recalcular_asociaciones_escenario(self.escenario, W_actual, R_actual)
+            # ----------------------------------------------------
+
             messagebox.showinfo("Éxito", mensaje, parent=self.ventana)
             self.ventana.destroy()
             self.callback_al_eliminar()
