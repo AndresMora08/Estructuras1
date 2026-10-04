@@ -46,6 +46,7 @@ class SismoLabGUI(
         f_botones.pack(pady=15)
 
         # Definición de categorías y sus opciones internas
+       # Definición de categorías y sus opciones internas
         self.categorias = {
             "Crear": [
                 ("Crear Zona", self._abrir_formulario_zona),
@@ -63,11 +64,15 @@ class SismoLabGUI(
                 ("Cargar Topología", self._cargar_por_topologia),
                 ("Guardar Topología", self._guardar_topologia_json),
             ],
+            "Versiones y Retroceso": [
+                ("Guardar Versión", self.guardar_version_con_nombre),
+                ("Restaurar Versión", self.restaurar_version_dialogo),
+                ("Deshacer Acción", self.deshacer_accion),
+            ],
             "Consultas y Asociaciones": [
                 ("Consultar Eventos", self._abrir_busqueda),
                 ("Procesar Reportes", self.abrir_ventana_reportes),
                 ("Asociaciones", self.abrir_ventana_asociaciones),
-                ("Deshacer", self._deshacer_accion),
             ]
         }
 
