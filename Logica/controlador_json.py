@@ -21,7 +21,11 @@ VERSION_ESQUEMA = 1
 TOLERANCIA = 1e-6
 MAXIMO_ERRORES_MOSTRADOS = 15
 
-CLAVES_ROTACIONES = ("LL", "RR", "LR", "RL", "giros_simples")
+# Every key written by the serializer must be accepted by the loader
+CLAVES_ROTACIONES = (
+    "LL", "RR", "LR", "RL",
+    "giros_simples", "giros_izquierda", "giros_derecha",
+)
 CLAVES_METRICAS_REPORTES = (
     "nuevos",
     "correcciones_aceptadas",
@@ -30,6 +34,8 @@ CLAVES_METRICAS_REPORTES = (
     "conflictos",
     "descartados_antiguos",
     "rechazados_retirados",
+    "archivos_masivos",
+    "eventos_archivados",
 )
 ATRIBUTOS_ESCENARIO = (
     "zonas", "estaciones", "epicentros", "reloj", "arbol_avl", "arbol_bst",
@@ -235,8 +241,9 @@ class ControladorJSON:
                 continue  # safety guard against corrupted in-memory cycles
             vistos.add(id(nodo))
 
-            altura_izq = nodo.izquierda.altura if nodo.izquierda is not None else 0
-            altura_der = nodo.derecha.altura if nodo.derecha is not None else 0
+            # Height convention: empty subtree = -1, leaf = 0
+            altura_izq = nodo.izquierda.altura if nodo.izquierda is not None else -1
+            altura_der = nodo.derecha.altura if nodo.derecha is not None else -1
             nodos.append({
                 "evento": cls._serializar_evento(nodo.evento),
                 "izquierdo": nodo.izquierda.evento.id if nodo.izquierda is not None else None,
@@ -747,13 +754,14 @@ class ControladorJSON:
         """
         Returns (root Nodo, is_unbalanced, {id: Evento}).
         Checks links, single position, no cycles, global BST order, heights and balance factors.
+        Height convention: empty subtree = -1, leaf = 0.
         """
         eventos_activos: Dict[int, Evento] = {}
-        
-        # NUEVO: Si el árbol es null/None, lo aceptamos como un árbol vacío
+
+        # A null tree is accepted as an empty tree
         if datos_arbol is None:
             return None, False, eventos_activos
-            
+
         if not isinstance(datos_arbol, dict) or not isinstance(datos_arbol.get("nodos"), list):
             ctx.error("El árbol debe ser null o un objeto con la lista 'nodos' y la clave 'raiz'.")
             return None, False, eventos_activos
@@ -862,9 +870,9 @@ class ControladorJSON:
         alturas: Dict[int, int] = {}
         desbalanceado = False
         for nodo in reversed(preorden):  # children always appear after their parent in preorder
-            altura_izq = alturas[id(nodo.izquierda)] if nodo.izquierda is not None else 0
-            altura_der = alturas[id(nodo.derecha)] if nodo.derecha is not None else 0
-            altura = 1 + max(altura_izq, altura_der)
+            altura_izq = alturas[id(nodo.izquierda)] if nodo.izquierda is not None else -1
+            altura_der = alturas[id(nodo.derecha)] if nodo.derecha is not None else -1
+            altura = 1 + max(altura_izq, altura_der)  # leaf = 0
             factor = altura_izq - altura_der
             alturas[id(nodo)] = altura
 
@@ -942,10 +950,10 @@ class ControladorJSON:
         """Returns (new state or None, errors, warnings). Nothing is applied here."""
         if not isinstance(datos, dict):
             return None, ["El archivo de topología debe ser un objeto JSON."], []
-            
-        # NUEVO: Busca la clave que exista en el JSON
+
+        # Accept either key name for the active tree section
         clave_arbol = "arbol_activo" if "arbol_activo" in datos else "arbol_avl"
-        
+
         if clave_arbol not in datos:
             return None, ["Falta la sección del árbol AVL (¿es un archivo de inserciones?)."], []
         if datos.get("version", VERSION_ESQUEMA) != VERSION_ESQUEMA:
@@ -967,11 +975,10 @@ class ControladorJSON:
         epicentros = cls._construir_epicentros(datos.get("epicentros", []), ctx)
         parametros = cls._leer_parametros(datos.get("parametros"), escenario, ctx)
         if ctx.errores:
-            return None, ctx.errores, []  
+            return None, ctx.errores, []
 
-        # NUEVO: Usa la clave dinámica aquí
         raiz, desbalanceado, activos = cls._reconstruir_arbol(datos.get(clave_arbol), ctx)
-        
+
         historico = cls._construir_historico(datos.get("historico", []), ctx)
         cola = cls._construir_cola(datos.get("cola_reportes", []), ctx)
         metricas_reportes, rotaciones = cls._leer_metricas(datos.get("metricas"), ctx)
@@ -1004,7 +1011,9 @@ class ControladorJSON:
 
         arbol = AVL(modo_estres=modo_estres)
         arbol.raiz = raiz
-        arbol.conteo_rotaciones = dict(rotaciones)
+        # Merge: keeps every default key of the AVL (e.g. giros_izquierda) even if
+        # the file omits it, so later rotations never hit a missing key.
+        arbol.conteo_rotaciones.update(rotaciones)
         arbol.actualizar_profundidades(parametros["L"])
 
         estado = {
@@ -1080,8 +1089,9 @@ class ControladorJSON:
         arbol_avl = AVL(modo_estres=False)
         arbol_bst = ArbolBST()
         for evento in activos.values():
-            arbol_avl.insertar(Nodo(evento=evento), parametros["L"])
+            arbol_avl.insertar(Nodo(evento=evento), parametros["L"], actualizar=False)
             arbol_bst.insertar(evento)
+        arbol_avl.actualizar_profundidades(parametros["L"])  # O(n), once
 
         estado = {
             "zonas": ctx.zonas,
@@ -1195,7 +1205,6 @@ class ControladorJSON:
             return "inserciones"
         if isinstance(datos, dict):
             formato = datos.get("formato")
-            # Ahora reconoce cualquiera de las dos claves
             if formato == TIPO_TOPOLOGIA or "arbol_activo" in datos or "arbol_avl" in datos:
                 return "topologia"
             if formato == TIPO_INSERCIONES or "eventos" in datos:

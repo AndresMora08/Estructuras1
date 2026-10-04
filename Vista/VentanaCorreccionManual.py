@@ -16,7 +16,7 @@ class VentanaCorreccionManual:
         arbol_avl,
         dict_eventos: dict,
         callback_refrescar,
-        escenario=None,  # <-- ACEPTAR ESCENARIO
+        escenario=None,
     ):
         self.ventana = tk.Toplevel(parent_window)
         self.ventana.title(f"Corregir Evento SIS-{evento_viejo.id:06d}")
@@ -26,10 +26,10 @@ class VentanaCorreccionManual:
 
         self.evento_viejo = evento_viejo
         self.callback_refrescar = callback_refrescar
-        
-        # PASAR EL ESCENARIO AL CONTROLADOR
+        self.escenario = escenario
+
         self.controlador = ControladorCorrecciones(
-            arbol_avl=arbol_avl, 
+            arbol_avl=arbol_avl,
             dict_eventos=dict_eventos,
             escenario=escenario
         )
@@ -43,7 +43,6 @@ class VentanaCorreccionManual:
         )
         frame.pack(fill="both", expand=True, padx=15, pady=15)
 
-        # 1. Magnitud
         ttk.Label(frame, text="Magnitud (Mw):").grid(
             row=0, column=0, sticky="w", padx=10, pady=8
         )
@@ -51,7 +50,6 @@ class VentanaCorreccionManual:
         self.entry_magnitud.insert(0, str(self.evento_viejo.magnitud))
         self.entry_magnitud.grid(row=0, column=1, padx=10, pady=8)
 
-        # 2. Profundidad
         ttk.Label(frame, text="Profundidad (km):").grid(
             row=1, column=0, sticky="w", padx=10, pady=8
         )
@@ -59,11 +57,9 @@ class VentanaCorreccionManual:
         self.entry_profundidad.insert(0, str(self.evento_viejo.profundidad))
         self.entry_profundidad.grid(row=1, column=1, padx=10, pady=8)
 
-        # Coordenadas actuales
         val_x = self.evento_viejo.epicentro.x if self.evento_viejo.epicentro else 0.0
         val_y = self.evento_viejo.epicentro.y if self.evento_viejo.epicentro else 0.0
 
-        # 3. Epicentro X
         ttk.Label(frame, text="Epicentro X:").grid(
             row=2, column=0, sticky="w", padx=10, pady=8
         )
@@ -71,7 +67,6 @@ class VentanaCorreccionManual:
         self.entry_x.insert(0, str(val_x))
         self.entry_x.grid(row=2, column=1, padx=10, pady=8)
 
-        # 4. Epicentro Y
         ttk.Label(frame, text="Epicentro Y:").grid(
             row=3, column=0, sticky="w", padx=10, pady=8
         )
@@ -79,7 +74,6 @@ class VentanaCorreccionManual:
         self.entry_y.insert(0, str(val_y))
         self.entry_y.grid(row=3, column=1, padx=10, pady=8)
 
-        # Botón Guardar
         btn_guardar = ttk.Button(
             frame, text="Guardar Corrección", command=self._procesar_guardado
         )
@@ -99,11 +93,16 @@ class VentanaCorreccionManual:
             )
             return
 
-        zona_existente = (
-            self.evento_viejo.epicentro.zona if self.evento_viejo.epicentro else None
-        )
-        nuevo_epicentro = Epicentro(x=x, y=y)
-        nuevo_epicentro.zona = zona_existente
+        esc = self.escenario
+
+        # The new epicenter is classified against the scenario zones, so the
+        # priority is derived from the NEW location (not the old zone).
+        zonas = esc.zonas if esc is not None else None
+        nuevo_epicentro = Epicentro(x=x, y=y, zonas_escenario=zonas)
+        if not zonas:
+            nuevo_epicentro.zona = (
+                self.evento_viejo.epicentro.zona if self.evento_viejo.epicentro else None
+            )
 
         evento_candidato = Evento(
             id_evento=self.evento_viejo.id,
@@ -114,26 +113,42 @@ class VentanaCorreccionManual:
             fecha_hora=self.evento_viejo.fecha_hora,
         )
 
-        exito = self.controlador.correccion_manual(
-            evento_nuevo=evento_candidato, evento_viejo=self.evento_viejo
-        )
+        # The whole correction is ONE undoable action. The snapshot is taken
+        # before touching anything; if it fails, the exact state is restored.
+        if esc is not None:
+            esc.guardar_estado_pila()
+
+        try:
+            exito = self.controlador.correccion_manual(
+                evento_nuevo=evento_candidato, evento_viejo=self.evento_viejo
+            )
+            if exito and esc is not None:
+                recalcular_asociaciones_escenario(esc, esc.W, esc.R)
+        except Exception as error:
+            if esc is not None:
+                esc.deshacer_ultima_accion()
+            messagebox.showerror(
+                "Error en la corrección",
+                f"No se aplicó ningún cambio (estado restaurado):\n{error}",
+                parent=self.ventana,
+            )
+            self.ventana.destroy()
+            self.callback_refrescar()
+            return
 
         if exito:
-            # --- NUEVO: Recalcular asociaciones en cascada tras corregir ---
-            W_actual = getattr(self.controlador.escenario, "W", 48.0)
-            R_actual = getattr(self.controlador.escenario, "R", 40.0)
-            recalcular_asociaciones_escenario(self.controlador.escenario, W_actual, R_actual)
-            # ---------------------------------------------------------------
-
+            # Read the live event (case B replaces the object in dict_eventos)
+            vivo = self.controlador.dict_eventos.get(self.evento_viejo.id, self.evento_viejo)
             messagebox.showinfo(
                 "Corrección Exitosa",
-                f"Evento SIS-{self.evento_viejo.id:06d} actualizado a la revisión"
-                f" r{self.evento_viejo.revision}.",
+                f"Evento SIS-{vivo.id:06d} actualizado a la revisión r{vivo.revision}.",
                 parent=self.ventana,
             )
             self.callback_refrescar()
             self.ventana.destroy()
         else:
+            if esc is not None:
+                esc.descartar_ultimo_estado()
             messagebox.showerror(
                 "Error de Validación",
                 "Los datos ingresados no cumplen las reglas del sistema. No se aplicó ningún cambio.",

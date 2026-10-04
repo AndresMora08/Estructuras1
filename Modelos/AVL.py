@@ -1,3 +1,4 @@
+import sys
 from collections import deque
 from typing import Dict, List, Optional, Tuple
 from Modelos.Evento import Evento
@@ -5,6 +6,11 @@ from Modelos.Nodo import Nodo
 from datetime import datetime as Datetime
 from datetime import datetime
 from datetime import timezone
+
+# Stress mode can leave a degenerate (list-like) tree; the recursive
+# operations need a higher limit than Python's default of 1000.
+sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
+
 
 class AVL:
     def __init__(self, modo_estres: bool = False):
@@ -21,6 +27,7 @@ class AVL:
         self._recorrer_y_actualizar_profundidades(nodo.izquierda, prof_actual + 1, limite_L)
         self._recorrer_y_actualizar_profundidades(nodo.derecha, prof_actual + 1, limite_L)
 
+    # Height convention: empty subtree = -1, leaf = 0
     def _obtener_altura(self, nodo: Optional[Nodo]) -> int:
         return -1 if nodo is None else nodo.altura
 
@@ -52,9 +59,15 @@ class AVL:
         self.conteo_rotaciones["giros_izquierda"] += 1
         return y
 
-    def insertar(self, nodo: Nodo, limite_L: int) -> None:
+    def insertar(self, nodo: Nodo, limite_L: int, actualizar: bool = True) -> None:
+        """
+        Insert is O(log n) in normal mode. Refreshing node depths and the
+        expensive-access marks walks the whole tree (O(n)), so bulk loops pass
+        actualizar=False and call actualizar_profundidades once at the end.
+        """
         self.raiz = self._insertar(self.raiz, nodo)
-        self.actualizar_profundidades(limite_L)
+        if actualizar:
+            self.actualizar_profundidades(limite_L)
 
     def _insertar(self, nodo_actual: Optional[Nodo], nuevo_nodo: Nodo) -> Nodo:
         if nodo_actual is None: return nuevo_nodo
@@ -82,9 +95,10 @@ class AVL:
             return self._rotacion_izquierda(nodo_actual)
         return nodo_actual
 
-    def eliminar(self, clave: Tuple[int, float, int], limite_L: int) -> None:
+    def eliminar(self, clave: Tuple[int, float, int], limite_L: int, actualizar: bool = True) -> None:
         self.raiz = self._eliminar(self.raiz, clave)
-        self.actualizar_profundidades(limite_L)
+        if actualizar:
+            self.actualizar_profundidades(limite_L)
 
     def _eliminar(self, raiz: Optional[Nodo], clave: Tuple[int, float, int]) -> Optional[Nodo]:
         if raiz is None: return None
@@ -125,19 +139,34 @@ class AVL:
         if abs(self._factor_balance(nodo)) > 1: return True
         return self._esta_desbalanceado(nodo.izquierda) or self._esta_desbalanceado(nodo.derecha)
 
+    # ------------------------------------------------------------------
+    # GLOBAL RECOVERY (works with height differences greater than 2)
+    # ------------------------------------------------------------------
     def recuperar_equilibrio(self, limite_L: int) -> None:
         if self.raiz is None:
             self.modo_estres = False
             self.actualizar_profundidades(limite_L)
             return
-        self.raiz = self._recuperar_equilibrio_paso(self.raiz)
+        self.raiz = self._reequilibrar(self.raiz)
         self.actualizar_profundidades(limite_L)
         self.modo_estres = self._esta_desbalanceado(self.raiz)
 
-    def _recuperar_equilibrio_paso(self, nodo: Optional[Nodo]) -> Optional[Nodo]:
-        if nodo is None: return None
-        nodo.izquierda = self._recuperar_equilibrio_paso(nodo.izquierda)
-        nodo.derecha = self._recuperar_equilibrio_paso(nodo.derecha)
+    def _reequilibrar(self, nodo: Optional[Nodo]) -> Optional[Nodo]:
+        """
+        Postorder rebalancing using only rotations over the existing nodes.
+
+        Both children are made AVL first. If the node is still unbalanced
+        (the difference can be > 2), it is rotated and the nodes that changed
+        level are rebalanced again. Termination: after each rotation, the heavy
+        child subtree of the new root is a strict subset of the previous one,
+        and the demoted node is rebalanced over a strictly smaller subtree.
+        Rotations never change the inorder sequence, so BST order is preserved.
+        """
+        if nodo is None:
+            return None
+
+        nodo.izquierda = self._reequilibrar(nodo.izquierda)
+        nodo.derecha = self._reequilibrar(nodo.derecha)
         self._actualizar_altura(nodo)
         balance = self._factor_balance(nodo)
 
@@ -145,17 +174,56 @@ class AVL:
             if self._factor_balance(nodo.izquierda) < 0:
                 self.conteo_rotaciones["LR"] += 1
                 nodo.izquierda = self._rotacion_izquierda(nodo.izquierda)
+                nodo.izquierda = self._reequilibrar(nodo.izquierda)
             else:
                 self.conteo_rotaciones["LL"] += 1
-            return self._rotacion_derecha(nodo)
+            nuevo = self._rotacion_derecha(nodo)
+            nuevo.derecha = self._reequilibrar(nuevo.derecha)
+            self._actualizar_altura(nuevo)
+            return self._reequilibrar_raiz(nuevo)
 
         if balance < -1:
             if self._factor_balance(nodo.derecha) > 0:
                 self.conteo_rotaciones["RL"] += 1
                 nodo.derecha = self._rotacion_derecha(nodo.derecha)
+                nodo.derecha = self._reequilibrar(nodo.derecha)
             else:
                 self.conteo_rotaciones["RR"] += 1
-            return self._rotacion_izquierda(nodo)
+            nuevo = self._rotacion_izquierda(nodo)
+            nuevo.izquierda = self._reequilibrar(nuevo.izquierda)
+            self._actualizar_altura(nuevo)
+            return self._reequilibrar_raiz(nuevo)
+
+        return nodo
+
+    def _reequilibrar_raiz(self, nodo: Nodo) -> Nodo:
+        """Re-checks only the root of a subtree whose children are already AVL."""
+        self._actualizar_altura(nodo)
+        balance = self._factor_balance(nodo)
+
+        if balance > 1:
+            if self._factor_balance(nodo.izquierda) < 0:
+                self.conteo_rotaciones["LR"] += 1
+                nodo.izquierda = self._rotacion_izquierda(nodo.izquierda)
+                nodo.izquierda = self._reequilibrar(nodo.izquierda)
+            else:
+                self.conteo_rotaciones["LL"] += 1
+            nuevo = self._rotacion_derecha(nodo)
+            nuevo.derecha = self._reequilibrar(nuevo.derecha)
+            self._actualizar_altura(nuevo)
+            return self._reequilibrar_raiz(nuevo)
+
+        if balance < -1:
+            if self._factor_balance(nodo.derecha) > 0:
+                self.conteo_rotaciones["RL"] += 1
+                nodo.derecha = self._rotacion_derecha(nodo.derecha)
+                nodo.derecha = self._reequilibrar(nodo.derecha)
+            else:
+                self.conteo_rotaciones["RR"] += 1
+            nuevo = self._rotacion_izquierda(nodo)
+            nuevo.izquierda = self._reequilibrar(nuevo.izquierda)
+            self._actualizar_altura(nuevo)
+            return self._reequilibrar_raiz(nuevo)
 
         return nodo
 
@@ -233,19 +301,27 @@ class AVL:
         if len(eventos) < k: self._buscar_top_k_pendientes(raiz.izquierda, k, eventos, nodos_visitados)
 
     def buscar_por_rango_magnitud(self, m_min: float, m_max: float) -> tuple[list, int]:
+        """
+        Magnitude is only the second component of K = (P, M, I), so the tree is
+        NOT ordered by magnitude globally: it is ordered by magnitude only inside
+        the same priority. No branch can be pruned safely, so the whole tree is
+        visited (worst case and best case O(n)). Iterative inorder traversal.
+        """
         if m_min > m_max or self.raiz is None: return [], 0
         eventos = []
-        nodos_visitados = [0]
-        self._buscar_por_rango_magnitud(self.raiz, m_min, m_max, eventos, nodos_visitados)
-        return eventos, nodos_visitados[0]
-
-    def _buscar_por_rango_magnitud(self, raiz: Optional[Nodo], m_min: float, m_max: float, eventos: list, nodos_visitados: list[int]) -> None:
-        if raiz is None: return
-        nodos_visitados[0] += 1
-        mag_actual = raiz.evento.magnitud
-        if mag_actual > m_min: self._buscar_por_rango_magnitud(raiz.izquierda, m_min, m_max, eventos, nodos_visitados)
-        if m_min <= mag_actual <= m_max: eventos.append(raiz.evento)
-        if mag_actual < m_max: self._buscar_por_rango_magnitud(raiz.derecha, m_min, m_max, eventos, nodos_visitados)
+        visitados = 0
+        pila = []
+        actual = self.raiz
+        while pila or actual is not None:
+            while actual is not None:
+                pila.append(actual)
+                actual = actual.izquierda
+            actual = pila.pop()
+            visitados += 1
+            if m_min <= actual.evento.magnitud <= m_max:
+                eventos.append(actual.evento)
+            actual = actual.derecha
+        return eventos, visitados
 
     def buscar_por_fecha_y_profundidad(self, fecha_inicio: str, fecha_fin: str, profundidad_limite: float) -> tuple[list, int]:
         if fecha_inicio > fecha_fin or profundidad_limite < 0.0 or self.raiz is None: return [], 0

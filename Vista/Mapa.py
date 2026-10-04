@@ -1,9 +1,11 @@
 import tkinter as tk
 from tkinter import ttk
 
+MAX_EVENTOS_TOOLTIP = 8
+
 
 class ToolTip:
-    """Ventana emergente para desplegar detalles al pasar el cursor sobre un objeto."""
+    """Pop-up window with details while the cursor is over an object."""
     def __init__(self, canvas):
         self.canvas = canvas
         self.tip_window = None
@@ -13,7 +15,7 @@ class ToolTip:
         self.tip_window = tw = tk.Toplevel(self.canvas)
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x_root + 15}+{y_root + 10}")
-        
+
         label = tk.Label(
             tw, text=texto, justify=tk.LEFT,
             background="#FFFFE1", relief=tk.SOLID, borderwidth=1,
@@ -31,20 +33,18 @@ class Mapa(tk.Toplevel):
     def __init__(self, parent, escenario):
         super().__init__(parent)
         self.title("Plano Geográfico Interactivo - SismoLab")
-        self.geometry("900x720")
-        
+        self.geometry("900x740")
+
         self.escenario = escenario
         self.tooltip = ToolTip(self)
-        
-        # Dimensiones del Canvas
+
         self.ancho_canvas = 800
         self.alto_canvas = 600
         self.margen = 50
-        
-        # Límites por defecto (se auto-calculan en dibujar_plano)
+
         self.x_min_geo, self.x_max_geo = 0.0, 1000.0
         self.y_min_geo, self.y_max_geo = 0.0, 1000.0
-        
+
         self.crear_interfaz()
         self.dibujar_plano()
 
@@ -52,19 +52,13 @@ class Mapa(tk.Toplevel):
         f_top = ttk.Frame(self)
         f_top.pack(fill=tk.X, padx=20, pady=8)
 
-        lbl_titulo = ttk.Label(
-            f_top, 
-            text="Plano Geográfico: Pasa el cursor sobre Zonas, Estaciones o Epicentros", 
-            font=("Arial", 11, "bold")
-        )
-        lbl_titulo.pack(side=tk.LEFT)
-
-        btn_refrescar = ttk.Button(
+        ttk.Label(
             f_top,
-            text="Refrescar Mapa",
-            command=self.dibujar_plano
-        )
-        btn_refrescar.pack(side=tk.RIGHT)
+            text="Plano Geográfico: pasa el cursor sobre Zonas, Estaciones o Epicentros",
+            font=("Arial", 11, "bold")
+        ).pack(side=tk.LEFT)
+
+        ttk.Button(f_top, text="Refrescar Mapa", command=self.dibujar_plano).pack(side=tk.RIGHT)
 
         self.canvas = tk.Canvas(
             self, width=self.ancho_canvas, height=self.alto_canvas,
@@ -72,15 +66,25 @@ class Mapa(tk.Toplevel):
         )
         self.canvas.pack(padx=20, pady=5)
 
+        ttk.Label(
+            self,
+            text=("Leyenda: círculo rojo = epicentro con eventos pendientes | verde = todos revisados | "
+                  "gris = sin eventos | el radio crece con la magnitud | rombo azul = estación | "
+                  "zona rosa = poblada, verde claro = no poblada"),
+            font=("Arial", 8), wraplength=860, justify=tk.LEFT
+        ).pack(padx=20, pady=(0, 8))
+
     def geo_a_pixel(self, x_geo, y_geo):
-        """Mapea coordenadas geográficas a píxeles con inversión de eje Y."""
+        """Maps km coordinates to pixels (Y axis is inverted)."""
         ancho_util = self.ancho_canvas - (2 * self.margen)
         alto_util = self.alto_canvas - (2 * self.margen)
-        
+
         dx = self.x_max_geo - self.x_min_geo
         dy = self.y_max_geo - self.y_min_geo
-        if dx == 0: dx = 1.0
-        if dy == 0: dy = 1.0
+        if dx == 0:
+            dx = 1.0
+        if dy == 0:
+            dy = 1.0
 
         px = self.margen + ((x_geo - self.x_min_geo) / dx) * ancho_util
         py = (self.alto_canvas - self.margen) - ((y_geo - self.y_min_geo) / dy) * alto_util
@@ -89,77 +93,57 @@ class Mapa(tk.Toplevel):
     def vincular_tooltip(self, id_item, texto_info):
         def en_hover(event):
             self.tooltip.mostrar(texto_info, event.x_root, event.y_root)
-            
+
         def en_leave(event):
             self.tooltip.ocultar()
 
         self.canvas.tag_bind(id_item, "<Enter>", en_hover)
         self.canvas.tag_bind(id_item, "<Leave>", en_leave)
 
-    def _extraer_xy(self, obj):
-        """Extrae (x, y) de diccionarios o de instancias de clase."""
-        if isinstance(obj, dict):
-            return float(obj.get("x", 0)), float(obj.get("y", 0))
-        return float(getattr(obj, "x", 0)), float(getattr(obj, "y", 0))
-
+    # ------------------------------------------------------------------
+    # DATA
+    # ------------------------------------------------------------------
     def _obtener_datos_escenario(self):
-        """Extrae las colecciones directamente desde las variables de la clase Escenario."""
-        zonas = getattr(self.escenario, "zonas", [])
-        estaciones = getattr(self.escenario, "estaciones", [])
-        epicentros = getattr(self.escenario, "epicentros", [])
-        
-        dict_eventos = getattr(self.escenario, "dict_eventos", {})
-        if isinstance(dict_eventos, dict):
-            eventos = list(dict_eventos.values())
-        else:
-            eventos = []
-
+        zonas = list(getattr(self.escenario, "zonas", []) or [])
+        estaciones = list(getattr(self.escenario, "estaciones", []) or [])
+        epicentros = list(getattr(self.escenario, "epicentros", []) or [])
+        dict_eventos = getattr(self.escenario, "dict_eventos", {}) or {}
+        eventos = list(dict_eventos.values())
         return zonas, estaciones, epicentros, eventos
 
-    def _obtener_info_zona_epicentro(self, ep):
-        """Lee directamente el objeto zona asignado al epicentro y determina si es poblada."""
-        # 1. Si el epicentro es una instancia de la clase Epicentro
-        if hasattr(ep, "zona"):
-            zona_obj = ep.zona
-            if zona_obj:
-                nombre_zona = getattr(zona_obj, "nombre", "Sin Nombre")
-                es_poblada = getattr(zona_obj, "poblada", False)
-                txt_poblada = "Sí (Zona Poblada)" if es_poblada else "No (Zona No Poblada)"
-                return nombre_zona, txt_poblada
-            return "Sin Zona Asignada", "No"
+    @staticmethod
+    def _clave_pos(x, y):
+        return (round(float(x), 1), round(float(y), 1))
 
-        # 2. Si el epicentro es un diccionario
-        if isinstance(ep, dict):
-            zona_obj = ep.get("zona")
-            if isinstance(zona_obj, dict):
-                nombre_zona = zona_obj.get("nombre", "Sin Nombre")
-                es_poblada = zona_obj.get("poblada", False)
-                txt_poblada = "Sí (Zona Poblada)" if es_poblada else "No (Zona No Poblada)"
-                return nombre_zona, txt_poblada
-            elif zona_obj:
-                nombre_zona = getattr(zona_obj, "nombre", "Sin Nombre")
-                es_poblada = getattr(zona_obj, "poblada", False)
-                txt_poblada = "Sí (Zona Poblada)" if es_poblada else "No (Zona No Poblada)"
-                return nombre_zona, txt_poblada
-
-        return "Sin Zona Asignada", "No"
-
-    def _calcular_limites_geograficos(self, zonas, estaciones, epicentros):
-        """Ajusta la escala automáticamente para que todo quepa en el Canvas."""
-        xs, ys = [], []
-
-        for z in zonas:
-            z_dict = z if isinstance(z, dict) else getattr(z, "__dict__", {})
-            xs.extend([float(z_dict.get("x_min", 0)), float(z_dict.get("x_max", 0))])
-            ys.extend([float(z_dict.get("y_min", 0)), float(z_dict.get("y_max", 0))])
-
-        for est in estaciones:
-            x, y = self._extraer_xy(est)
-            xs.append(x)
-            ys.append(y)
-
+    def _puntos_epicentro(self, epicentros, eventos):
+        """
+        Epicenters to draw: the ones of the scenario plus the ones of events whose
+        coordinates are not registered as a scenario epicenter (e.g. loaded from JSON).
+        """
+        puntos = {}
         for ep in epicentros:
-            x, y = self._extraer_xy(ep)
+            puntos.setdefault(self._clave_pos(ep.x, ep.y), ep)
+        for ev in eventos:
+            if ev.epicentro is not None:
+                puntos.setdefault(self._clave_pos(ev.epicentro.x, ev.epicentro.y), ev.epicentro)
+        return puntos
+
+    @staticmethod
+    def _info_zona_epicentro(ep):
+        zona = getattr(ep, "zona", None)
+        if zona is None:
+            return "Sin Zona Asignada", "No"
+        return zona.nombre, "Sí (Zona Poblada)" if zona.poblada else "No (Zona No Poblada)"
+
+    def _calcular_limites_geograficos(self, zonas, estaciones, puntos):
+        xs, ys = [], []
+        for z in zonas:
+            xs.extend([z.x_min, z.x_max])
+            ys.extend([z.y_min, z.y_max])
+        for est in estaciones:
+            xs.append(est.x)
+            ys.append(est.y)
+        for (x, y) in puntos:
             xs.append(x)
             ys.append(y)
 
@@ -174,127 +158,90 @@ class Mapa(tk.Toplevel):
             self.x_min_geo, self.x_max_geo = 0.0, 1000.0
             self.y_min_geo, self.y_max_geo = 0.0, 1000.0
 
+    # ------------------------------------------------------------------
+    # DRAWING
+    # ------------------------------------------------------------------
     def dibujar_plano(self):
         self.canvas.delete("all")
         zonas, estaciones, epicentros, eventos = self._obtener_datos_escenario()
+        puntos = self._puntos_epicentro(epicentros, eventos)
 
-        self._calcular_limites_geograficos(zonas, estaciones, epicentros)
+        self._calcular_limites_geograficos(zonas, estaciones, puntos)
 
-        # 1. DIBUJAR ZONAS GEOGRÁFICAS
+        # 1. ZONES
         for z in zonas:
-            z_dict = z if isinstance(z, dict) else getattr(z, "__dict__", {})
-            x_min = float(z_dict.get("x_min", 0))
-            x_max = float(z_dict.get("x_max", 0))
-            y_min = float(z_dict.get("y_min", 0))
-            y_max = float(z_dict.get("y_max", 0))
-            
-            x1, y1 = self.geo_a_pixel(x_min, y_min)
-            x2, y2 = self.geo_a_pixel(x_max, y_max)
-            
-            poblada = getattr(z, 'poblada', z_dict.get("poblada", False))
-            nombre = getattr(z, 'nombre', z_dict.get("nombre", 'N/A'))
-            color_zona = "#FFEBEB" if poblada else "#EBFEEB"
-            
+            x1, y1 = self.geo_a_pixel(z.x_min, z.y_min)
+            x2, y2 = self.geo_a_pixel(z.x_max, z.y_max)
             rect_id = self.canvas.create_rectangle(
                 x1, y1, x2, y2,
-                fill=color_zona, outline="#888888", width=1, dash=(4, 2)
+                fill="#FFEBEB" if z.poblada else "#EBFEEB",
+                outline="#888888", width=1, dash=(4, 2)
             )
-            
-            info_zona = (
-                f"Zona: {nombre}\n"
-                f"Poblada: {'Sí' if poblada else 'No'}\n"
-                f"Rango X: [{x_min}, {x_max}]\n"
-                f"Rango Y: [{y_min}, {y_max}]"
+            self.vincular_tooltip(
+                rect_id,
+                f"Zona: {z.nombre}\n"
+                f"Poblada: {'Sí' if z.poblada else 'No'}\n"
+                f"Rango X: [{z.x_min}, {z.x_max}]\n"
+                f"Rango Y: [{z.y_min}, {z.y_max}]"
             )
-            self.vincular_tooltip(rect_id, info_zona)
 
-        # 2. DIBUJAR ESTACIONES DE MONITOREO
+        # 2. STATIONS
+        r = 8
         for est in estaciones:
-            ex, ey = self._extraer_xy(est)
-            px, py = self.geo_a_pixel(ex, ey)
-            r = 8
-            
-            e_dict = est if isinstance(est, dict) else getattr(est, "__dict__", {})
-            nombre_est = getattr(est, 'nombre', e_dict.get('nombre', e_dict.get('id_estacion', 'Estación')))
-            id_est = getattr(est, 'id_estacion', e_dict.get('id_estacion', 'N/A'))
-            
+            px, py = self.geo_a_pixel(est.x, est.y)
             est_id = self.canvas.create_polygon(
                 [px, py - r, px + r, py, px, py + r, px - r, py],
                 fill="#1E88E5", outline="black", width=1
             )
-            
-            info_estacion = f"Estación: {nombre_est}\nID: {id_est}\nPosición: ({ex}, {ey})"
-            self.vincular_tooltip(est_id, info_estacion)
+            self.vincular_tooltip(
+                est_id,
+                f"Estación: {est.nombre}\nID: {est.id_estacion}\nPosición: ({est.x}, {est.y})"
+            )
 
-        # 3. AGRUPAR EVENTOS POR SUS COORDENADAS DE EPICENTRO
+        # 3. GROUP EVENTS BY EPICENTER COORDINATES
         eventos_por_coordenada = {}
         for ev in eventos:
-            ev_dict = ev if isinstance(ev, dict) else getattr(ev, "__dict__", {})
-            ep_obj = getattr(ev, 'epicentro', ev_dict.get("epicentro", {}))
-            ev_x, ev_y = self._extraer_xy(ep_obj)
-            
-            clave_pos = (round(ev_x, 1), round(ev_y, 1))
-            if clave_pos not in eventos_por_coordenada:
-                eventos_por_coordenada[clave_pos] = []
-            eventos_por_coordenada[clave_pos].append(ev)
+            if ev.epicentro is None:
+                continue
+            clave = self._clave_pos(ev.epicentro.x, ev.epicentro.y)
+            eventos_por_coordenada.setdefault(clave, []).append(ev)
 
-        # 4. DIBUJAR EPICENTROS (USA EPICENTRO.ZONA Y ZONA.POBLADA)
-        for ep in epicentros:
-            ep_x, ep_y = self._extraer_xy(ep)
+        # 4. EPICENTERS
+        for clave_ep, ep in puntos.items():
+            ep_x, ep_y = clave_ep
             px, py = self.geo_a_pixel(ep_x, ep_y)
-            clave_ep = (round(ep_x, 1), round(ep_y, 1))
-            
-            # Obtener zona y estado poblado a través del objeto epicentro
-            nombre_zona, txt_poblada = self._obtener_info_zona_epicentro(ep)
+            nombre_zona, txt_poblada = self._info_zona_epicentro(ep)
+            asociados = eventos_por_coordenada.get(clave_ep, [])
 
-            eventos_asociados = eventos_por_coordenada.get(clave_ep, [])
-
-            if eventos_asociados:
-                eventos_ordenados = sorted(
-                    eventos_asociados, 
-                    key=lambda e: float(getattr(e, 'magnitud', e.get('magnitud', 0) if isinstance(e, dict) else 0)), 
-                    reverse=True
-                )
-                
-                evento_max = eventos_ordenados[0]
-                mag_max = float(getattr(evento_max, 'magnitud', 0.0) if not isinstance(evento_max, dict) else evento_max.get('magnitud', 0.0))
-                
-                hay_pendiente = any(
-                    (getattr(ev, 'estado_atencion', 'Pendiente') if not isinstance(ev, dict) else ev.get('estado_atencion', 'Pendiente')) == "Pendiente"
-                    for ev in eventos_asociados
-                )
+            if asociados:
+                ordenados = sorted(asociados, key=lambda e: e.magnitud, reverse=True)
+                mag_max = ordenados[0].magnitud
+                hay_pendiente = any(e.estado == "Pendiente" for e in asociados)
                 color = "#D32F2F" if hay_pendiente else "#388E3C"
                 radio = max(int(mag_max * 3), 7)
-                
+
                 ep_id = self.canvas.create_oval(
                     px - radio, py - radio, px + radio, py + radio,
                     fill=color, outline="yellow", width=2
                 )
-                
-                lineas_info = [
+
+                lineas = [
                     f"EPICENTRO: ({ep_x}, {ep_y})",
                     f"Zona Asignada: {nombre_zona}",
                     f"¿Zona Poblada?: {txt_poblada}",
-                    f"Total de sismos registrados: {len(eventos_asociados)}",
-                    "-" * 32
+                    f"Total de sismos registrados: {len(asociados)}",
+                    "-" * 32,
                 ]
-                
-                for idx, ev in enumerate(eventos_ordenados, start=1):
-                    is_dict = isinstance(ev, dict)
-                    id_ev = getattr(ev, 'id', getattr(ev, 'id_evento', 'N/A')) if not is_dict else ev.get('id_evento', ev.get('id', 'N/A'))
-                    mag = getattr(ev, 'magnitud', 'N/A') if not is_dict else ev.get('magnitud', 'N/A')
-                    prof = getattr(ev, 'profundidad', 'N/A') if not is_dict else ev.get('profundidad', 'N/A')
-                    estado = getattr(ev, 'estado_atencion', 'N/A') if not is_dict else ev.get('estado_atencion', 'N/A')
-                    fecha = getattr(ev, 'fecha_hora', 'N/A') if not is_dict else ev.get('fecha_hora', 'N/A')
-                    
-                    lineas_info.append(
-                        f"#{idx} | ID: {id_ev}\n"
-                        f"   • Magnitud: {mag} Mw | Prof: {prof} km\n"
-                        f"   • Estado: {estado}\n"
-                        f"   • Fecha: {fecha}"
+                for idx, ev in enumerate(ordenados[:MAX_EVENTOS_TOOLTIP], start=1):
+                    lineas.append(
+                        f"#{idx} | SIS-{ev.id:06d} | Prioridad {ev.prioridad}\n"
+                        f"   • Magnitud: {ev.magnitud} Mw | Prof: {ev.profundidad} km\n"
+                        f"   • Estado: {ev.estado}\n"
+                        f"   • Fecha: {ev.fecha_hora}"
                     )
-                
-                info_ep = "\n".join(lineas_info)
+                if len(ordenados) > MAX_EVENTOS_TOOLTIP:
+                    lineas.append(f"... y {len(ordenados) - MAX_EVENTOS_TOOLTIP} más")
+                info_ep = "\n".join(lineas)
             else:
                 radio = 4
                 ep_id = self.canvas.create_oval(
@@ -302,7 +249,7 @@ class Mapa(tk.Toplevel):
                     fill="#757575", outline="black", width=1
                 )
                 info_ep = (
-                    f"Epicentro Monitoreado (Sin Evento)\n"
+                    "Epicentro Monitoreado (Sin Evento)\n"
                     f"Posición: ({ep_x}, {ep_y})\n"
                     f"Zona Asignada: {nombre_zona}\n"
                     f"¿Zona Poblada?: {txt_poblada}"

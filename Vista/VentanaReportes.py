@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Dict, Optional
 
+from Modelos.Asociaciones import recalcular_asociaciones_escenario
 from Modelos.Escenario import Escenario
 from Modelos.Evento import Evento
 from Logica.control_reportes import ControladorReportes
@@ -18,10 +19,15 @@ class VentanaReportes(tk.Toplevel):
 
         self.title("SismoLab - Gestión y Procesamiento de Reportes Sísmicos")
         self.geometry("1000x550")
-        self.state('zoomed') # Maximiza la ventana automáticamente para que todo quepa
+        self.state('zoomed')
 
         self.escenario = escenario
         self.controlador = ControladorReportes(escenario)
+
+        # Associations are recomputed every time a report changes the catalog
+        self.controlador.actualizar_asociaciones = lambda _id_evento: (
+            recalcular_asociaciones_escenario(self.escenario, self.escenario.W, self.escenario.R)
+        )
 
         self.mapa_eventos: Dict[str, Optional[Evento]] = {}
         self.mapa_estaciones: Dict[str, object] = {}
@@ -127,14 +133,10 @@ class VentanaReportes(tk.Toplevel):
             side=tk.LEFT, padx=5
         )
 
-        # ------------------------------------------------------------------------
-        # BLOQUE INFERIOR: EMPAQUETAR PRIMERO PARA EVITAR QUE SE OCULTE
-        # ------------------------------------------------------------------------
-        
-        # Panel Exclusivo Punto 14 (Se ancla al fondo)
+        # Bottom block is packed first so it never gets hidden
         self.f_indicadores = ttk.LabelFrame(self, text=" Indicadores Estructurales del AVL ", padding=5)
         self.f_indicadores.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=5)
-        
+
         self.lbl_indicadores_avl = ttk.Label(self.f_indicadores, text="", font=("Arial", 9))
         self.lbl_indicadores_avl.pack(fill=tk.X)
         self.lbl_recorridos_avl = ttk.Label(self.f_indicadores, text="", font=("Arial", 9))
@@ -142,13 +144,10 @@ class VentanaReportes(tk.Toplevel):
         self.lbl_eventos_prioridad = ttk.Label(self.f_indicadores, text="", font=("Arial", 9))
         self.lbl_eventos_prioridad.pack(fill=tk.X)
 
-        # Contadores de métricas (Se ancla justo encima de los indicadores)
         self.lbl_metricas = ttk.Label(self, text="", font=("Arial", 9))
         self.lbl_metricas.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=(0, 2))
 
-        # ------------------------------------------------------------------------
-        # BLOQUE CENTRAL: FIFO queue and log (Ahora toma el espacio restante)
-        # ------------------------------------------------------------------------
+        # Central block: FIFO queue and log
         paned = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
         paned.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=5)
 
@@ -174,6 +173,8 @@ class VentanaReportes(tk.Toplevel):
         self.btn_continuo.pack(side=tk.LEFT, padx=2)
         self.btn_pausa = ttk.Button(f_controles, text="Pausar", state=tk.DISABLED, command=self._pausar_continuo)
         self.btn_pausa.pack(side=tk.LEFT, padx=2)
+        self.btn_deshacer = ttk.Button(f_controles, text="Deshacer última acción", command=self._deshacer_accion)
+        self.btn_deshacer.pack(side=tk.LEFT, padx=10)
 
         self.tree_cola.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         sb_cola.pack(side=tk.RIGHT, fill=tk.Y)
@@ -244,6 +245,16 @@ class VentanaReportes(tk.Toplevel):
         self._reemplazar_texto(self.ent_x, evento.epicentro.x if evento.epicentro else 0.0)
         self._reemplazar_texto(self.ent_y, evento.epicentro.y if evento.epicentro else 0.0)
 
+    def _refrescar_todo(self):
+        """Refreshes every widget from the (possibly replaced) scenario objects."""
+        self._cargar_eventos_combo()
+        self._cargar_estaciones()
+        self._actualizar_tabla_cola()
+        self.var_modo_estres.set(self.controlador.modo_estres_activo())
+        self._actualizar_estado_arbol()
+        self._actualizar_metricas()
+        self._actualizar_reloj()
+
     # ------------------------------------------------------------------
     # ENQUEUE
     # ------------------------------------------------------------------
@@ -296,15 +307,33 @@ class VentanaReportes(tk.Toplevel):
             messagebox.showwarning("Ráfaga de ejemplo", mensaje, parent=self)
 
     # ------------------------------------------------------------------
-    # PROCESSING
+    # PROCESSING (each step is ONE undoable action)
     # ------------------------------------------------------------------
 
     def _procesar_un_paso(self) -> bool:
+        if not self.escenario.cola_reportes:
+            self._log("--- La cola de reportes se encuentra vacía. ---")
+            self._pausar_continuo()
+            return False
+
+        # Snapshot BEFORE the step: undoing restores scenario and queue position
+        # (even if the step discarded the report).
+        self.escenario.guardar_estado_pila()
         resultado = self.controlador.procesar_siguiente_reporte()
 
         if resultado is None:
+            self.escenario.descartar_ultimo_estado()
             self._log("--- La cola de reportes se encuentra vacía. ---")
             self._pausar_continuo()
+            return False
+
+        if resultado["resultado"] == "ERROR":
+            # Restore the exact previous state (report stays at the queue front)
+            self.escenario.deshacer_ultima_accion()
+            self._pausar_continuo()
+            self._refrescar_todo()
+            self._log(f"[ERROR] SIS-{resultado['id_evento']:06d}: {resultado['detalle']}")
+            messagebox.showerror("Error de procesamiento", resultado["detalle"], parent=self)
             return False
 
         self._actualizar_tabla_cola()
@@ -327,11 +356,6 @@ class VentanaReportes(tk.Toplevel):
             "--------------------------------------------------",
         ]
         self._log("\n".join(lineas))
-
-        if resultado["resultado"] == "ERROR":
-            self._pausar_continuo()
-            messagebox.showerror("Error de procesamiento", resultado["detalle"], parent=self)
-            return False
         return True
 
     def _iniciar_continuo(self):
@@ -359,6 +383,15 @@ class VentanaReportes(tk.Toplevel):
         self.btn_paso.config(state=tk.NORMAL)
         self.btn_pausa.config(state=tk.DISABLED)
 
+    def _deshacer_accion(self):
+        """Undoes the last action of the stack (queue step, clock, mode, recovery, ...)."""
+        self._pausar_continuo()
+        if not self.escenario.deshacer_ultima_accion():
+            messagebox.showwarning("Deshacer", "No hay acciones previas para deshacer.", parent=self)
+            return
+        self._refrescar_todo()
+        self._log(">>> Última acción deshecha: escenario, histórico, cola, reloj, parámetros y métricas restaurados.")
+
     # ------------------------------------------------------------------
     # STRESS MODE, AUDIT, RECOVERY
     # ------------------------------------------------------------------
@@ -378,6 +411,8 @@ class VentanaReportes(tk.Toplevel):
                 self._log(">>> Retorno a modo normal RECHAZADO: el árbol aún no está balanceado.")
                 return
 
+        # Mode change is an independent undoable action
+        self.escenario.guardar_estado_pila()
         self.controlador.establecer_modo_estres(self.var_modo_estres.get())
         estado = "ACTIVADO" if self.var_modo_estres.get() else "DESACTIVADO"
         self._log(f">>> Modo estrés {estado}.")
@@ -385,15 +420,25 @@ class VentanaReportes(tk.Toplevel):
 
     def _ejecutar_recuperacion_global(self):
         self._pausar_continuo()
+
+        # Global recovery is ONE undoable action
+        self.escenario.guardar_estado_pila()
         try:
             resultado = self.controlador.recuperar_equilibrio_global()
         except Exception as error:
+            self.escenario.deshacer_ultima_accion()
+            self._refrescar_todo()
             messagebox.showerror("Recuperación global", f"No se pudo recuperar el equilibrio: {error}", parent=self)
             return
 
         previa = resultado["auditoria_previa"]
         final = resultado["auditoria_final"]
         rot = resultado["rotaciones"]
+
+        # Nothing to recover: no state change, so no undo entry
+        if len(previa["desbalanceados"]) == 0:
+            self.escenario.descartar_ultimo_estado()
+
         max_dif = max((abs(f) for _, f in previa["desbalanceados"]), default=0)
         lineas = [
             "==================================================",
@@ -409,18 +454,17 @@ class VentanaReportes(tk.Toplevel):
 
         self.var_modo_estres.set(self.controlador.modo_estres_activo())
         self._actualizar_estado_arbol()
-        self._actualizar_metricas() 
+        self._actualizar_metricas()
 
-        # --- VENTANAS EMERGENTES (POP-UPS) CON PARENT=SELF PARA QUE NO SE CONGELE ---
         if len(previa['desbalanceados']) == 0:
             messagebox.showinfo(
-                "Árbol Balanceado", 
+                "Árbol Balanceado",
                 "El árbol ya se encuentra perfectamente balanceado (Condición AVL cumplida).\n\nNo se requieren rotaciones de recuperación.",
                 parent=self
             )
         elif resultado['confirmado']:
             messagebox.showinfo(
-                "Recuperación Exitosa", 
+                "Recuperación Exitosa",
                 f"¡El árbol ha sido rebalanceado con éxito!\n\n"
                 f"• Nodos reparados: {len(previa['desbalanceados'])}\n"
                 f"• Rotaciones aplicadas: {rot.get('giros_simples', 0)}\n"
@@ -429,7 +473,7 @@ class VentanaReportes(tk.Toplevel):
             )
         else:
             messagebox.showwarning(
-                "Advertencia", 
+                "Advertencia",
                 "Se intentó rebalancear el árbol pero la auditoría final detectó fallos.",
                 parent=self
             )
@@ -488,7 +532,7 @@ class VentanaReportes(tk.Toplevel):
 
     def _actualizar_metricas(self):
         m = self.controlador.metricas
-        
+
         self.lbl_metricas.config(
             text=(
                 f"Nuevos: {m['nuevos']} | Correcciones aceptadas: {m['correcciones_aceptadas']} | "
@@ -499,12 +543,12 @@ class VentanaReportes(tk.Toplevel):
                 f"En cola: {len(self.escenario.cola_reportes)}"
             )
         )
-        
+
         if self.escenario.arbol_avl:
             avl = self.escenario.arbol_avl
             auditoria = self.controlador.auditar_arbol()
             rot = avl.conteo_rotaciones
-            
+
             self.lbl_indicadores_avl.config(
                 text=(
                     f"Activos: {auditoria['total_nodos']} | Históricos: {len(self.escenario.historico)} | "
@@ -513,32 +557,30 @@ class VentanaReportes(tk.Toplevel):
                     f"(Giros={rot['giros_simples']})"
                 )
             )
-            
-            # --- MOSTRANDO HASTA 15 VALORES PARA CUBRIR LAS PRUEBAS DEL PROFESOR ---
+
             inorden = avl.recorrido_inorden()
             preorden = avl.recorrido_preorden()
             postorden = avl.recorrido_postorden()
             niveles = avl.recorrido_por_niveles()
-            
+
             mostrar_in = ", ".join(inorden[:15]) + ("..." if len(inorden) > 15 else "")
             mostrar_pre = ", ".join(preorden[:15]) + ("..." if len(preorden) > 15 else "")
             mostrar_post = ", ".join(postorden[:15]) + ("..." if len(postorden) > 15 else "")
             mostrar_niv = ", ".join(niveles[:15]) + ("..." if len(niveles) > 15 else "")
-            
+
             self.lbl_recorridos_avl.config(
                 text=(
                     f"Inorden: [{mostrar_in}] | Preorden: [{mostrar_pre}]\n"
                     f"Postorden: [{mostrar_post}] | Por Niveles: [{mostrar_niv}]"
                 )
             )
-            # ---------------------------------------------------------
-            
+
             pri_alta = sum(1 for ev in self.escenario.dict_eventos.values() if ev.prioridad == 3)
             pri_media = sum(1 for ev in self.escenario.dict_eventos.values() if ev.prioridad == 2)
             pri_baja = sum(1 for ev in self.escenario.dict_eventos.values() if ev.prioridad == 1)
             pendientes = sum(1 for ev in self.escenario.dict_eventos.values() if ev.estado == "Pendiente")
             costosos = sum(1 for ev in self.escenario.dict_eventos.values() if getattr(ev, 'acceso_costoso', False))
-            
+
             self.lbl_eventos_prioridad.config(
                 text=(
                     f"Prioridades - Alta: {pri_alta} | Media: {pri_media} | Baja: {pri_baja} || "
@@ -555,11 +597,15 @@ class VentanaReportes(tk.Toplevel):
         except ValueError:
             messagebox.showerror("Error de formato", "Ingrese un número de horas válido.", parent=self)
             return
+
+        # Clock advance is an independent undoable action
+        self.escenario.guardar_estado_pila()
         exito, mensaje = self.controlador.avanzar_reloj(horas)
         if exito:
             self._actualizar_reloj()
             self._log(f"[RELOJ] {mensaje}")
         else:
+            self.escenario.descartar_ultimo_estado()
             messagebox.showerror("Reloj", mensaje, parent=self)
 
     def _log(self, mensaje: str):

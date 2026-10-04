@@ -9,7 +9,7 @@ class VentanaAsociaciones(tk.Toplevel):
     def __init__(self, parent, escenario_actual, callback_actualizar=None):
         super().__init__(parent)
         self.title("Asociación Sísmica")
-        self.geometry("1100x500") 
+        self.geometry("1100x500")
         self.minsize(950, 400)
 
         self.escenario_actual = escenario_actual
@@ -21,26 +21,27 @@ class VentanaAsociaciones(tk.Toplevel):
         self.crear_interfaz()
 
     # ==============================================================
-    # INTERFAZ
+    # INTERFACE
     # ==============================================================
     def crear_interfaz(self):
         main_frame = ttk.Frame(self, padding=10)
         main_frame.pack(fill="both", expand=True)
 
-        # ----------------------------------------------------------
-        # CONFIGURACIÓN DE PARÁMETROS
-        # ----------------------------------------------------------
         frame_aso = ttk.LabelFrame(main_frame, text=" Configuración de Parámetros ")
         frame_aso.pack(fill="x", padx=5, pady=5)
 
+        # Initial values come from the scenario (not hard-coded)
+        w_actual = getattr(self.escenario_actual, "W", 48.0)
+        r_actual = getattr(self.escenario_actual, "R", 40.0)
+
         ttk.Label(frame_aso, text="Ventana W (horas):").grid(row=0, column=0, padx=5, pady=5)
         self.entry_W = ttk.Entry(frame_aso, width=10)
-        self.entry_W.insert(0, "48.0")
+        self.entry_W.insert(0, str(w_actual))
         self.entry_W.grid(row=0, column=1, padx=5, pady=5)
 
         ttk.Label(frame_aso, text="Radio R (km):").grid(row=0, column=2, padx=5, pady=5)
         self.entry_R = ttk.Entry(frame_aso, width=10)
-        self.entry_R.insert(0, "40.0")
+        self.entry_R.insert(0, str(r_actual))
         self.entry_R.grid(row=0, column=3, padx=5, pady=5)
 
         btn_recalcular = ttk.Button(
@@ -50,9 +51,6 @@ class VentanaAsociaciones(tk.Toplevel):
         )
         btn_recalcular.grid(row=0, column=4, padx=15, pady=5)
 
-        # ----------------------------------------------------------
-        # TABLA DE EVENTOS
-        # ----------------------------------------------------------
         tabla_frame = ttk.Frame(main_frame)
         tabla_frame.pack(fill="both", expand=True, pady=10)
 
@@ -84,7 +82,7 @@ class VentanaAsociaciones(tk.Toplevel):
         self.actualizar_tabla()
 
     # ==============================================================
-    # OBTENER EVENTOS DEL ESCENARIO
+    # SCENARIO EVENTS
     # ==============================================================
     def obtener_eventos(self):
         if not self.escenario_actual:
@@ -117,7 +115,7 @@ class VentanaAsociaciones(tk.Toplevel):
         return []
 
     # ==============================================================
-    # EJECUTAR RECÁLCULO DE ASOCIACIONES
+    # RECOMPUTE ASSOCIATIONS
     # ==============================================================
     def ejecutar_recalculo(self):
         try:
@@ -144,7 +142,16 @@ class VentanaAsociaciones(tk.Toplevel):
             return
 
         try:
-            recalcular_asociaciones_escenario(self.escenario_actual, W, R)
+            esc = self.escenario_actual
+            if hasattr(esc, "cambiar_parametros") and (W != esc.W or R != esc.R):
+                # Changing W/R is an undoable action and recomputes the associations
+                exito, mensaje = esc.cambiar_parametros(W, R, esc.L, esc.T)
+                if not exito:
+                    messagebox.showerror("Error de Parámetros", mensaje, parent=self)
+                    return
+            else:
+                recalcular_asociaciones_escenario(esc, W, R)
+
             self.actualizar_tabla()
             if self.callback_actualizar:
                 self.callback_actualizar()
@@ -158,7 +165,7 @@ class VentanaAsociaciones(tk.Toplevel):
             messagebox.showerror("Error de Asociaciones", f"No se pudieron calcular las asociaciones.\n\nDetalle: {e}", parent=self)
 
     # ==============================================================
-    # ACTUALIZAR TABLA
+    # TABLE
     # ==============================================================
     def actualizar_tabla(self):
         for item in self.tabla_eventos.get_children():
@@ -168,7 +175,7 @@ class VentanaAsociaciones(tk.Toplevel):
         if not eventos:
             return
 
-        # Diccionario para encontrar quién apunta a quién (Réplicas)
+        # Reverse references: who points to whom (replicas)
         referencias_inversas = {}
         for ev in eventos:
             id_ref = getattr(ev, "id_referencia", None)
@@ -182,7 +189,7 @@ class VentanaAsociaciones(tk.Toplevel):
             fecha = getattr(ev, "fecha_hora", getattr(ev, "fecha", ""))
             magnitud = getattr(ev, "magnitud", "")
             profundidad = getattr(ev, "profundidad", "")
-            
+
             estado = getattr(ev, "estado", "")
             if hasattr(estado, "value"):
                 estado = estado.value
@@ -195,7 +202,6 @@ class VentanaAsociaciones(tk.Toplevel):
             replicas = referencias_inversas.get(id_evento, [])
             replicas_str = ", ".join(replicas) if replicas else "Ninguna"
 
-            # Obtención robusta de candidatos con respaldo de seguridad
             candidatos_lista = getattr(ev, "candidatos_ids", None)
             if not candidatos_lista:
                 candidatos_lista = getattr(ev, "candidatos", [])

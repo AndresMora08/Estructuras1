@@ -1,233 +1,221 @@
-from datetime import datetime
+import math
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Tuple
+
+FORMATO_FECHA_ISO = "%Y-%m-%dT%H:%M:%SZ"
+EPSILON = 1e-9
 
 
 def obtener_eventos_escenario(escenario):
     """
-    Obtiene los eventos del escenario, independientemente
-    de si están almacenados en un diccionario, lista o árbol AVL.
+    Events that take part in associations: active + archived.
+    Removed (retired) events are never considered.
     """
     if not escenario:
         return []
 
-    # 1. Diccionario principal de eventos
-    dict_eventos = getattr(escenario, "dict_eventos", None)
-    if dict_eventos:
-        return list(dict_eventos.values())
+    activos = getattr(escenario, "dict_eventos", None) or {}
+    eventos = list(activos.values())
+    ids = set(activos.keys())
 
-    # 2. Árbol AVL utilizado por la interfaz
-    arbol_avl = getattr(escenario, "arbol_avl", None)
-    if arbol_avl:
-        if hasattr(arbol_avl, "obtener_todos_los_eventos"):
-            return arbol_avl.obtener_todos_los_eventos()
-        if hasattr(arbol_avl, "inorden"):
-            return arbol_avl.inorden()
-
-    # 3. Árbol de eventos alternativo
-    arbol_eventos = getattr(escenario, "arbol_eventos", None)
-    if arbol_eventos:
-        if hasattr(arbol_eventos, "obtener_todos_los_eventos"):
-            return arbol_eventos.obtener_todos_los_eventos()
-        if hasattr(arbol_eventos, "inorden"):
-            return arbol_eventos.inorden()
-
-    # 4. Lista de eventos
-    eventos = getattr(escenario, "eventos", None)
-    if eventos is not None:
-        return list(eventos)
-
-    return []
+    for evento in getattr(escenario, "historico", None) or []:
+        if evento.estado_catalogo == "Archivado" and evento.id not in ids:
+            eventos.append(evento)
+            ids.add(evento.id)
+    return eventos
 
 
-def obtener_fecha(evento):
-    """
-    Obtiene la fecha del evento como datetime.
-    """
-    fecha = getattr(evento, "fecha", None)
-    if isinstance(fecha, datetime):
-        return fecha
+def normalizar_fecha(fecha: datetime) -> datetime:
+    """Returns an aware UTC datetime (naive values are assumed to be UTC)."""
+    if fecha.tzinfo is None:
+        return fecha.replace(tzinfo=timezone.utc)
+    return fecha.astimezone(timezone.utc)
 
+
+def obtener_fecha(evento) -> datetime:
+    """Occurrence time of the event as an aware UTC datetime."""
     fecha_hora = getattr(evento, "fecha_hora", None)
-    if isinstance(fecha_hora, datetime):
-        return fecha_hora
 
-    if fecha_hora:
+    if isinstance(fecha_hora, datetime):
+        return normalizar_fecha(fecha_hora)
+
+    if isinstance(fecha_hora, str):
         try:
-            return datetime.fromisoformat(
-                fecha_hora.replace("Z", "+00:00")
-            )
-        except (ValueError, AttributeError):
+            return datetime.strptime(fecha_hora.strip(), FORMATO_FECHA_ISO).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+        try:
+            return normalizar_fecha(datetime.fromisoformat(fecha_hora.strip().replace("Z", "+00:00")))
+        except ValueError:
             pass
 
-    raise ValueError(
-        f"El evento {getattr(evento, 'id', '?')} "
-        "no tiene una fecha válida."
+    raise ValueError(f"El evento {getattr(evento, 'id', '?')} no tiene una fecha válida.")
+
+
+def distancia(evento_a, evento_b) -> float:
+    """Euclidean distance between epicenters (km)."""
+    return math.hypot(
+        evento_a.epicentro.x - evento_b.epicentro.x,
+        evento_a.epicentro.y - evento_b.epicentro.y,
     )
 
 
-def normalizar_fecha(fecha):
+def es_candidato(evento_A, evento_B, W, R) -> bool:
     """
-    Normaliza las fechas a UTC sin zona horaria para
-    permitir comparaciones entre fechas ISO y datetime.
+    A is a candidate reference of B when A has a strictly greater magnitude,
+    occurred strictly before B, within at most W hours and at most R km.
     """
-    if fecha.tzinfo is not None:
-        fecha = fecha.astimezone(
-            datetime.now().astimezone().tzinfo
-        )
-        fecha = fecha.replace(tzinfo=None)
-    return fecha
-
-
-def es_candidato(evento_A, evento_B, W, R):
-    """
-    Evalúa si evento_A puede ser el evento principal
-    de evento_B.
-    """
-    estado_A = getattr(evento_A, "estado", "")
-    estado_B = getattr(evento_B, "estado", "")
-
-    if hasattr(estado_A, "value"):
-        estado_A = estado_A.value
-    if hasattr(estado_B, "value"):
-        estado_B = estado_B.value
-
-    if str(estado_A).upper() == "ELIMINADO":
-        return False
-    if str(estado_B).upper() == "ELIMINADO":
-        return False
-
-    # 1. Magnitud estrictamente mayor
     if evento_A.magnitud <= evento_B.magnitud:
         return False
 
-    # 2. Comparación de fechas
-    fecha_A = normalizar_fecha(obtener_fecha(evento_A))
-    fecha_B = normalizar_fecha(obtener_fecha(evento_B))
-
+    fecha_A = obtener_fecha(evento_A)
+    fecha_B = obtener_fecha(evento_B)
     if fecha_A >= fecha_B:
         return False
 
-    # 3. Ventana temporal
-    diferencia_horas = (
-        fecha_B - fecha_A
-    ).total_seconds() / 3600.0
-
-    if diferencia_horas > W or diferencia_horas < 0:
+    diferencia_horas = (fecha_B - fecha_A).total_seconds() / 3600.0
+    if diferencia_horas > W + EPSILON:
         return False
 
-    # 4. Distancia entre epicentros
-    dx = evento_A.epicentro.x - evento_B.epicentro.x
-    dy = evento_A.epicentro.y - evento_B.epicentro.y
-
-    distancia_cuadrado = dx * dx + dy * dy
-
-    if distancia_cuadrado > R * R:
-        return False
-
-    return True
+    return distancia(evento_A, evento_B) <= R + EPSILON
 
 
 def seleccionar_referencia(evento_B, candidatos):
     """
-    Selecciona el evento principal aplicando:
-    1. Mayor magnitud.
-    2. Menor distancia.
-    3. Fecha más antigua.
-    4. Menor ID.
+    Deterministic choice that only depends on the data:
+    1. Greater magnitude. 2. Smaller distance. 3. Older date. 4. Smaller id.
+    Returns the id of the chosen event (or None).
     """
     if not candidatos:
         return None
 
     def clave_desempate(candidato):
-        dx = (
-            candidato.epicentro.x
-            - evento_B.epicentro.x
-        )
-        dy = (
-            candidato.epicentro.y
-            - evento_B.epicentro.y
-        )
-        distancia_cuadrado = dx * dx + dy * dy
-
-        try:
-            id_key = (0, int(candidato.id))
-        except (ValueError, TypeError):
-            id_key = (1, str(candidato.id))
-
-        fecha = normalizar_fecha(
-            obtener_fecha(candidato)
-        )
-
         return (
             -candidato.magnitud,
-            distancia_cuadrado,
-            fecha,
-            id_key
+            round(distancia(candidato, evento_B), 9),
+            obtener_fecha(candidato),
+            int(candidato.id),
         )
 
-    elegido = min(
-        candidatos,
-        key=clave_desempate
-    )
-
-    return elegido.id
+    return min(candidatos, key=clave_desempate).id
 
 
 def recalcular_asociaciones_escenario(escenario, W, R):
-    """
-    Recalcula las asociaciones sísmicas de todos
-    los eventos del escenario activo.
-    """
+    """Recomputes the associations of every active and archived event."""
     if not escenario:
         return
 
     if W <= 0 or R <= 0:
-        raise ValueError(
-            "W y R deben ser mayores que cero."
-        )
+        raise ValueError("W y R deben ser mayores que cero.")
 
-    # Obtener todos los eventos
-    todos = obtener_eventos_escenario(escenario)
-
-    if not todos:
+    validos = obtener_eventos_escenario(escenario)
+    if not validos:
         return
 
-    # 1. Limpiar referencias anteriores
-    for evento in todos:
+    for evento in validos:
         evento.id_referencia = None
         evento.candidatos_ids = []
 
-    # 2. Excluir eventos eliminados
-    eventos_validos = []
-    for evento in todos:
-        estado = getattr(evento, "estado", "")
-        if hasattr(estado, "value"):
-            estado = estado.value
-
-        if str(estado).upper() != "ELIMINADO":
-            eventos_validos.append(evento)
-
-    # 3. Buscar referencia para cada evento
-    for evento_B in eventos_validos:
+    for evento_B in validos:
         candidatos = [
-            evento_A
-            for evento_A in eventos_validos
-            if (
-                evento_A.id != evento_B.id
-                and es_candidato(
-                    evento_A,
-                    evento_B,
-                    W,
-                    R
-                )
-            )
+            evento_A for evento_A in validos
+            if evento_A.id != evento_B.id and es_candidato(evento_A, evento_B, W, R)
         ]
+        evento_B.id_referencia = seleccionar_referencia(evento_B, candidatos)
+        evento_B.candidatos_ids = sorted(c.id for c in candidatos)
 
-        evento_B.id_referencia = seleccionar_referencia(
-            evento_B,
-            candidatos
-        )
-        
-        # Guardamos la lista de IDs de los candidatos encontrados
-        evento_B.candidatos_ids = [c.id for c in candidatos]
+    return validos
 
-    return todos
+
+# ----------------------------------------------------------------------
+# QUERY HELPERS
+# ----------------------------------------------------------------------
+def estado_en_catalogo(escenario, id_evento: int) -> Tuple[Optional[str], Optional[object]]:
+    """Returns ('Activo' | 'Archivado' | 'Retirado' | None, event)."""
+    if escenario is None:
+        return None, None
+
+    activo = (getattr(escenario, "dict_eventos", None) or {}).get(id_evento)
+    if activo is not None:
+        return "Activo", activo
+
+    for evento in reversed(getattr(escenario, "historico", None) or []):
+        if evento.id == id_evento:
+            return evento.estado_catalogo, evento
+
+    return None, None
+
+
+def candidatos_de(escenario, evento_B, W=None, R=None) -> list:
+    """Live candidates of B among active and archived events."""
+    W = escenario.W if W is None else W
+    R = escenario.R if R is None else R
+    candidatos = [
+        evento_A for evento_A in obtener_eventos_escenario(escenario)
+        if evento_A.id != evento_B.id and es_candidato(evento_A, evento_B, W, R)
+    ]
+    return sorted(candidatos, key=lambda c: c.id)
+
+
+def replicas_de(escenario, id_evento: int) -> list:
+    """Events whose chosen reference is the given event."""
+    return sorted(
+        (e for e in obtener_eventos_escenario(escenario) if e.id_referencia == id_evento),
+        key=lambda e: e.id,
+    )
+
+
+def auditar_referencias(escenario) -> List[str]:
+    """
+    Read-only check: references point to active/archived events (never removed
+    or missing), there are no cycles, and no identity is duplicated between the
+    active catalog and the history.
+    """
+    errores: List[str] = []
+    activos = dict(getattr(escenario, "dict_eventos", None) or {})
+    archivados: Dict[int, object] = {}
+    retirados = set()
+    vistos_historico = set()
+
+    for evento in getattr(escenario, "historico", None) or []:
+        if evento.id in vistos_historico:
+            errores.append(f"SIS-{evento.id:06d}: identificador duplicado en el histórico.")
+        vistos_historico.add(evento.id)
+        if evento.id in activos:
+            errores.append(f"SIS-{evento.id:06d}: está a la vez en eventos activos y en el histórico.")
+        if evento.estado_catalogo == "Retirado":
+            retirados.add(evento.id)
+        elif evento.estado_catalogo == "Archivado":
+            archivados[evento.id] = evento
+
+    visibles = dict(archivados)
+    visibles.update(activos)
+
+    for id_evento, evento in visibles.items():
+        referencia = evento.id_referencia
+        if referencia is None:
+            continue
+        if referencia == id_evento:
+            errores.append(f"SIS-{id_evento:06d}: se referencia a sí mismo.")
+        elif referencia in retirados:
+            errores.append(f"SIS-{id_evento:06d}: referencia al evento eliminado SIS-{referencia:06d}.")
+        elif referencia not in visibles:
+            errores.append(f"SIS-{id_evento:06d}: referencia a un evento inexistente SIS-{referencia:06d}.")
+
+    reportados = set()
+    for inicio in visibles:
+        if inicio in reportados:
+            continue
+        camino: List[int] = []
+        vistos = set()
+        actual = inicio
+        while actual is not None and actual in visibles and actual not in vistos:
+            vistos.add(actual)
+            camino.append(actual)
+            actual = visibles[actual].id_referencia
+        if actual is not None and actual in vistos:
+            ciclo = camino[camino.index(actual):]
+            errores.append("Ciclo de referencias: " + " -> ".join(f"SIS-{i:06d}" for i in ciclo + [actual]))
+            reportados.update(ciclo)
+
+    return errores

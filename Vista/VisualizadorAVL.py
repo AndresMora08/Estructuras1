@@ -1,18 +1,19 @@
 import tkinter as tk
-from Modelos.AVL import AVL
 
 
 class VisualizadorAVL:
+    """
+    Draws the active AVL. It accepts either an AVL or the Escenario; with the
+    scenario it always reads the LIVE tree (undo / restore replace the object).
+    """
 
-    def __init__(self, root: tk.Tk, arbol_avl: AVL):
-        # 1. Crear ventana modal sencilla
+    def __init__(self, root: tk.Tk, fuente):
         self.ventana = tk.Toplevel(root)
         self.ventana.title("Visualizador Árbol AVL")
         self.ventana.geometry("900x600")
 
-        self.arbol_avl = arbol_avl
+        self._fuente = fuente
 
-        # 2. Botón de actualizar (Tkinter básico)
         btn_actualizar = tk.Button(
             self.ventana,
             text="Actualizar Árbol",
@@ -23,77 +24,72 @@ class VisualizadorAVL:
         )
         btn_actualizar.pack(pady=10)
 
-        # 3. Lienzo de dibujo (Canvas)
         self.canvas = tk.Canvas(self.ventana, bg="white")
         self.canvas.pack(fill="both", expand=True)
 
-        # Dibujar por primera vez
         self.dibujar_arbol()
 
-    def dibujar_arbol(self):
-        """Limpia la pantalla y empieza el dibujo desde la raíz."""
-        self.canvas.delete("all")
+    @property
+    def arbol_avl(self):
+        # An Escenario exposes 'arbol_avl'; an AVL instance does not
+        return getattr(self._fuente, "arbol_avl", self._fuente)
 
-        # Si el árbol está vacío, mostrar mensaje
-        if not self.arbol_avl or not self.arbol_avl.raiz:
+    def dibujar_arbol(self):
+        """Clears the canvas and draws from the root."""
+        self.canvas.delete("all")
+        arbol = self.arbol_avl
+
+        if not arbol or not arbol.raiz:
             self.canvas.create_text(
-                450,
-                250,
+                450, 250,
                 text="El Árbol AVL está vacío",
                 font=("Arial", 14, "bold"),
                 fill="gray",
             )
             return
 
-        # Dibujar a partir de la raíz en el centro del canvas
-        self._dibujar_nodo(
-            nodo=self.arbol_avl.raiz, x=450, y=50, desplazamiento=200
-        )
+        self._dibujar_nodo(nodo=arbol.raiz, x=450, y=50, desplazamiento=200)
 
     def _dibujar_nodo(self, nodo, x: int, y: int, desplazamiento: int):
-        """Método recursivo sencillo para dibujar ramas y nodos."""
+        """Recursive drawing: priority 3 is red fill, expensive access is a thick orange border."""
         if nodo is None:
             return
 
         radio = 25
         separacion_y = 60
 
-        # --- DIBUJAR HIJO IZQUIERDO ---
         if nodo.izquierda:
             x_hijo = x - desplazamiento
             y_hijo = y + separacion_y
-            # Línea de conexión
             self.canvas.create_line(x, y, x_hijo, y_hijo, fill="gray", width=2)
-            # Llamada recursiva
-            self._dibujar_nodo(
-                nodo.izquierda, x_hijo, y_hijo, max(desplazamiento // 2, 30)
-            )
+            self._dibujar_nodo(nodo.izquierda, x_hijo, y_hijo, max(desplazamiento // 2, 30))
 
-        # --- DIBUJAR HIJO DERECHO ---
         if nodo.derecha:
             x_hijo = x + desplazamiento
             y_hijo = y + separacion_y
-            # Línea de conexión
             self.canvas.create_line(x, y, x_hijo, y_hijo, fill="gray", width=2)
-            # Llamada recursiva
-            self._dibujar_nodo(
-                nodo.derecha, x_hijo, y_hijo, max(desplazamiento // 2, 30)
-            )
+            self._dibujar_nodo(nodo.derecha, x_hijo, y_hijo, max(desplazamiento // 2, 30))
 
-        # --- DIBUJAR EL NODO (Círculo y Texto) ---
-        # Círculo
+        color_fondo = "#E1F5FE"
+        color_borde = "#0288D1"
+        grosor_borde = 2
+
+        # Priority is shown with the fill color
+        if nodo.evento.prioridad == 3:
+            color_fondo = "#FFCDD2"
+            color_borde = "#C62828"
+
+        # Expensive access is shown ONLY with the border (never confused with priority)
+        if getattr(nodo.evento, "acceso_costoso", False):
+            color_borde = "#FF8F00"
+            grosor_borde = 5
+
         self.canvas.create_oval(
-            x - radio,
-            y - radio,
-            x + radio,
-            y + radio,
-            fill="#E1F5FE",
-            outline="#0288D1",
-            width=2,
+            x - radio, y - radio, x + radio, y + radio,
+            fill=color_fondo, outline=color_borde, width=grosor_borde
         )
 
-        # Texto interno
         texto_nodo = f"ID: {nodo.evento.id}\nK: {nodo.clave}"
         self.canvas.create_text(
-            x, y, text=texto_nodo, font=("Arial", 8, "bold"), fill="#01579B"
+            x, y, text=texto_nodo, font=("Arial", 8, "bold"), fill="#212121"
         )

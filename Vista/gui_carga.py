@@ -1,14 +1,15 @@
 from tkinter import messagebox, simpledialog, Toplevel, Listbox, Button, SINGLE, END
 from Logica.controlador_json import ControladorJSON
+from Modelos.Asociaciones import recalcular_asociaciones_escenario
 
 
 class CargaMixin:
 
     # ==================================================================
-    # DESHACER (PILA DE RETROCESO)
+    # UNDO (STACK)
     # ==================================================================
     def deshacer_accion(self):
-        """Invoca el retroceso del escenario y actualiza la interfaz."""
+        """Undoes the last action and refreshes the interface."""
         exito = self.escenario.deshacer_ultima_accion()
         if exito:
             self.actualizar_interfaz()
@@ -17,10 +18,10 @@ class CargaMixin:
             messagebox.showwarning("Deshacer", "No hay acciones previas en la pila para deshacer.", parent=self.root)
 
     # ==================================================================
-    # GESTIÓN DE VERSIONES PERSISTENTES
+    # PERSISTENT NAMED VERSIONS
     # ==================================================================
     def guardar_version_con_nombre(self):
-        """Solicita un nombre al usuario y persiste la versión actual en disco."""
+        """Asks for a name and stores the current version on disk."""
         nombre = simpledialog.askstring("Guardar Versión", "Ingrese el nombre de la versión:", parent=self.root)
         if nombre:
             exito, mensaje = self.escenario.guardar_version_persistente(nombre)
@@ -30,7 +31,7 @@ class CargaMixin:
                 messagebox.showerror("Error", mensaje, parent=self.root)
 
     def restaurar_version_dialogo(self):
-        """Despliega una ventana emergente para elegir y restaurar una versión persistente."""
+        """Pop-up to choose and restore a persistent version."""
         versiones = self.escenario.listar_versiones_persistentes()
         if not versiones:
             messagebox.showinfo("Restaurar Versión", "No hay versiones guardadas actualmente.", parent=self.root)
@@ -54,8 +55,8 @@ class CargaMixin:
                 messagebox.showwarning("Atención", "Seleccione una versión de la lista.", parent=ventana)
                 return
             nombre_version = listbox.get(seleccion[0])
-            
-            # Restaurar (registra en la pila de deshacer automáticamente)
+
+            # Restoring pushes its own snapshot, so it can be undone
             exito, mensaje = self.escenario.restaurar_version_persistente(nombre_version)
             ventana.destroy()
 
@@ -69,10 +70,27 @@ class CargaMixin:
         btn_restaurar.pack(pady=5)
 
     # ==================================================================
-    # CARGA POR INSERCIONES (APILANDO ESTADO PREVIO)
+    # ASSOCIATIONS AFTER A LOAD
+    # ==================================================================
+    def _recalcular_asociaciones_tras_carga(self):
+        """
+        A load replaces the catalog, so the associations are recomputed with the
+        deterministic policy (same logical result as the stored references).
+        """
+        try:
+            recalcular_asociaciones_escenario(self.escenario, self.escenario.W, self.escenario.R)
+        except Exception as error:
+            messagebox.showwarning(
+                "Asociaciones",
+                f"La carga fue exitosa pero no se pudieron recalcular las asociaciones:\n{error}",
+                parent=self.root
+            )
+
+    # ==================================================================
+    # LOAD BY INSERTIONS (STACKING PREVIOUS STATE)
     # ==================================================================
     def _cargar_por_inserciones(self):
-        # Guardar estado previo para permitir deshacer la carga
+        # Snapshot first so the load can be undone
         self.escenario.guardar_estado_pila()
 
         exito = ControladorJSON.cargar_por_inserciones(
@@ -81,17 +99,17 @@ class CargaMixin:
         )
 
         if exito:
+            self._recalcular_asociaciones_tras_carga()
             self.actualizar_interfaz()
             self.actualizar_tabla_eventos()
         else:
-            # Si la carga falló/se canceló, removemos el snapshot redundante de la pila
+            # Failed or cancelled: drop the redundant snapshot
             self.escenario.pila_deshacer.pop()
 
     # ==================================================================
-    # CARGA POR TOPOLOGÍA (APILANDO ESTADO PREVIO)
+    # LOAD BY TOPOLOGY (STACKING PREVIOUS STATE)
     # ==================================================================
     def _cargar_por_topologia(self):
-        # Guardar estado previo para permitir deshacer la carga
         self.escenario.guardar_estado_pila()
 
         exito = ControladorJSON.cargar_por_topologia(
@@ -100,14 +118,14 @@ class CargaMixin:
         )
 
         if exito:
+            self._recalcular_asociaciones_tras_carga()
             self.actualizar_interfaz()
             self.actualizar_tabla_eventos()
         else:
-            # Si la carga falló/se canceló, removemos el snapshot redundante de la pila
             self.escenario.pila_deshacer.pop()
 
     # ==================================================================
-    # GUARDADO
+    # SAVE
     # ==================================================================
     def _guardar_topologia_json(self):
         """Saves the full operational state (reloadable with 'Cargar Topología')."""
@@ -124,7 +142,7 @@ class CargaMixin:
         )
 
     # ==================================================================
-    # ACTUALIZAR INTERFAZ
+    # REFRESH INTERFACE
     # ==================================================================
     def actualizar_interfaz(self):
         self.root.update_idletasks()
