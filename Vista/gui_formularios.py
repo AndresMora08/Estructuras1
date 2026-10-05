@@ -356,9 +356,22 @@ class FormulariosMixin:
                 esc.dict_eventos[id_evt] = nuevo_evento
 
                 if esc.arbol_avl is not None:
-                    esc.arbol_avl.insertar(Nodo(evento=nuevo_evento), esc.L)
+                 esc.arbol_avl.insertar(
+                 Nodo(evento=nuevo_evento),
+                 esc.L
+                )
 
-                recalcular_asociaciones_escenario(esc, esc.W, esc.R)
+                if esc.arbol_bst is not None:
+                    esc.arbol_bst.insertar(
+                    nuevo_evento,
+                     esc.L
+                     )
+
+                recalcular_asociaciones_escenario(
+                   esc,
+                   esc.W,
+                   esc.R
+                    )
             except Exception as error:
                 esc.deshacer_ultima_accion()
                 messagebox.showerror(

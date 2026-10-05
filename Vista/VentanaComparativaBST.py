@@ -1,218 +1,606 @@
-import copy
-import random
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
 from Modelos import Metricas
-from Modelos.AVL import AVL
-from Modelos.BST import ArbolBST
-from Modelos.Nodo import Nodo
 
-ORDENES = [
-    "Por niveles del AVL actual",
-    "Ascendente por clave",
-    "Descendente por clave",
-    "Por identificador",
-    "Aleatorio (semilla 42)",
-]
 
-DX, DY, RADIO = 38, 56, 17
+RADIO = 18
+DX = 55
+DY = 70
 
 
 class VentanaComparativaBST(tk.Toplevel):
     """
-    Compares an AVL (balanced) and a BST (unbalanced) built from the SAME
-    active events, with the same comparator and the same insertion order.
-    The live scenario is never modified (events are inserted as copies).
+    Muestra lado a lado el AVL y el BST reales del escenario.
+
+    El AVL corresponde a escenario.arbol_avl.
+    El BST corresponde a escenario.arbol_bst.
+
+    Esta ventana solamente consulta y dibuja los árboles.
+    No modifica el escenario.
     """
 
     def __init__(self, parent, escenario):
         super().__init__(parent)
-        self.title("Comparación AVL vs BST")
-        self.geometry("1250x820")
 
+        self.parent = parent
         self.escenario = escenario
 
-        if self.escenario.arbol_avl is None or self.escenario.arbol_avl.raiz is None:
-            messagebox.showinfo("Sin eventos", "No hay eventos activos para comparar.", parent=parent)
-            self.destroy()
-            return
+        self.title("Comparación AVL vs BST")
+        self.geometry("1350x750")
+        self.minsize(1000, 600)
 
-        f_top = ttk.Frame(self)
-        f_top.pack(fill="x", padx=10, pady=8)
-        ttk.Label(f_top, text="Orden de inserción:").pack(side="left", padx=5)
-        self.combo_orden = ttk.Combobox(f_top, values=ORDENES, state="readonly", width=32)
-        self.combo_orden.current(0)
-        self.combo_orden.pack(side="left", padx=5)
-        self.combo_orden.bind("<<ComboboxSelected>>", lambda e: self._actualizar())
-        ttk.Button(f_top, text="Recalcular", command=self._actualizar).pack(side="left", padx=10)
-        self.lbl_info = ttk.Label(f_top, text="", font=("Arial", 9, "bold"))
-        self.lbl_info.pack(side="left", padx=15)
-
-        paned = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
-        paned.pack(fill="both", expand=True, padx=10, pady=5)
-        self.canvas_avl = self._crear_canvas(paned, " AVL (con balanceo) ")
-        self.canvas_bst = self._crear_canvas(paned, " BST (sin balanceo) ")
-
-        f_tabla = ttk.LabelFrame(self, text=" Métricas estructurales por orden de inserción ")
-        f_tabla.pack(fill="x", padx=10, pady=5)
-        columnas = ("orden", "estructura", "nodos", "altura", "hojas", "comp_prom", "comp_max", "comp_total")
-        encabezados = ("Orden", "Estructura", "Nodos", "Altura", "Hojas",
-                       "Comparaciones (prom.)", "Comparaciones (máx.)", "Comparaciones (total)")
-        anchos = (230, 150, 60, 60, 60, 160, 160, 160)
-        self.tabla = ttk.Treeview(f_tabla, columns=columnas, show="headings", height=12)
-        for col, enc, ancho in zip(columnas, encabezados, anchos):
-            self.tabla.heading(col, text=enc)
-            self.tabla.column(col, width=ancho, anchor="center")
-        self.tabla.pack(fill="x", padx=5, pady=5)
-
-        ttk.Label(
-            f_tabla,
-            text="Comparaciones = nodos visitados al buscar cada clave almacenada (profundidad + 1). "
-                 "Colores: prioridad alta = rojo; borde naranja grueso = acceso costoso.",
-            font=("Arial", 8),
-        ).pack(anchor="w", padx=5, pady=(0, 5))
-
+        self._crear_interfaz()
         self._actualizar()
 
-    # ------------------------------------------------------------------
-    # BUILDING
-    # ------------------------------------------------------------------
-    def _crear_canvas(self, paned, titulo):
-        marco = ttk.LabelFrame(paned, text=titulo)
-        paned.add(marco, weight=1)
-        canvas = tk.Canvas(marco, bg="white", height=330)
-        sb_x = ttk.Scrollbar(marco, orient="horizontal", command=canvas.xview)
-        sb_y = ttk.Scrollbar(marco, orient="vertical", command=canvas.yview)
-        canvas.configure(xscrollcommand=sb_x.set, yscrollcommand=sb_y.set)
-        canvas.grid(row=0, column=0, sticky="nsew")
-        sb_y.grid(row=0, column=1, sticky="ns")
-        sb_x.grid(row=1, column=0, sticky="ew")
-        marco.rowconfigure(0, weight=1)
-        marco.columnconfigure(0, weight=1)
+    # ==============================================================
+    # INTERFAZ
+    # ==============================================================
+
+    def _crear_interfaz(self):
+
+        marco_superior = ttk.Frame(self)
+        marco_superior.pack(
+            fill="x",
+            padx=10,
+            pady=10
+        )
+
+        ttk.Label(
+            marco_superior,
+            text="Comparación de estructuras",
+            font=("Arial", 14, "bold")
+        ).pack(
+            side="left"
+        )
+
+        ttk.Button(
+            marco_superior,
+            text="Actualizar",
+            command=self._actualizar
+        ).pack(
+            side="right"
+        )
+
+        marco_arboles = ttk.Frame(self)
+        marco_arboles.pack(
+            fill="both",
+            expand=True,
+            padx=10,
+            pady=5
+        )
+
+        marco_avl = ttk.LabelFrame(
+            marco_arboles,
+            text=" AVL del escenario "
+        )
+
+        marco_avl.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(0, 5)
+        )
+
+        marco_bst = ttk.LabelFrame(
+            marco_arboles,
+            text=" BST del escenario "
+        )
+
+        marco_bst.pack(
+            side="right",
+            fill="both",
+            expand=True,
+            padx=(5, 0)
+        )
+
+        self.canvas_avl = self._crear_canvas(
+            marco_avl
+        )
+
+        self.canvas_bst = self._crear_canvas(
+            marco_bst
+        )
+
+        # ==========================================================
+        # MÉTRICAS
+        # ==========================================================
+
+        marco_metricas = ttk.LabelFrame(
+            self,
+            text=" Métricas estructurales "
+        )
+
+        marco_metricas.pack(
+            fill="x",
+            padx=10,
+            pady=10
+        )
+
+        marco_avl_metricas = ttk.LabelFrame(
+            marco_metricas,
+            text=" AVL "
+        )
+
+        marco_avl_metricas.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=5,
+            pady=5
+        )
+
+        marco_bst_metricas = ttk.LabelFrame(
+            marco_metricas,
+            text=" BST "
+        )
+
+        marco_bst_metricas.pack(
+            side="right",
+            fill="x",
+            expand=True,
+            padx=5,
+            pady=5
+        )
+
+        self.lbl_metricas_avl = ttk.Label(
+            marco_avl_metricas,
+            text="AVL: --",
+            font=("Arial", 9),
+            justify="left"
+        )
+
+        self.lbl_metricas_avl.pack(
+            anchor="w",
+            padx=10,
+            pady=8
+        )
+
+        self.lbl_metricas_bst = ttk.Label(
+            marco_bst_metricas,
+            text="BST: --",
+            font=("Arial", 9),
+            justify="left"
+        )
+
+        self.lbl_metricas_bst.pack(
+            anchor="w",
+            padx=10,
+            pady=8
+        )
+
+    def _crear_canvas(self, padre):
+
+        marco = ttk.Frame(padre)
+
+        marco.pack(
+            fill="both",
+            expand=True
+        )
+
+        canvas = tk.Canvas(
+            marco,
+            background="white"
+        )
+
+        scrollbar_vertical = ttk.Scrollbar(
+            marco,
+            orient="vertical",
+            command=canvas.yview
+        )
+
+        scrollbar_horizontal = ttk.Scrollbar(
+            marco,
+            orient="horizontal",
+            command=canvas.xview
+        )
+
+        canvas.configure(
+            yscrollcommand=scrollbar_vertical.set,
+            xscrollcommand=scrollbar_horizontal.set
+        )
+
+        canvas.grid(
+            row=0,
+            column=0,
+            sticky="nsew"
+        )
+
+        scrollbar_vertical.grid(
+            row=0,
+            column=1,
+            sticky="ns"
+        )
+
+        scrollbar_horizontal.grid(
+            row=1,
+            column=0,
+            sticky="ew"
+        )
+
+        marco.rowconfigure(
+            0,
+            weight=1
+        )
+
+        marco.columnconfigure(
+            0,
+            weight=1
+        )
+
         return canvas
 
-    def _eventos_activos_por_niveles(self):
-        raiz = self.escenario.arbol_avl.raiz
-        return [n.evento for n in Metricas.nodos_por_niveles(raiz)]
+    # ==============================================================
+    # ACTUALIZAR
+    # ==============================================================
 
-    def _eventos_en_orden(self, nombre):
-        eventos = self._eventos_activos_por_niveles()
-        if nombre == ORDENES[0]:
-            return eventos
-        if nombre == ORDENES[1]:
-            return sorted(eventos, key=lambda e: e.clave)
-        if nombre == ORDENES[2]:
-            return sorted(eventos, key=lambda e: e.clave, reverse=True)
-        if nombre == ORDENES[3]:
-            return sorted(eventos, key=lambda e: e.id)
-        mezclados = list(eventos)
-        random.Random(42).shuffle(mezclados)
-        return mezclados
-
-    def _construir(self, eventos):
-        """Same comparator, same order. Shallow copies keep live events untouched."""
-        limite_L = self.escenario.L
-        avl = AVL(modo_estres=False)
-        bst = ArbolBST()
-        for evento in eventos:
-            avl.insertar(Nodo(evento=copy.copy(evento)), limite_L)
-            bst.insertar(copy.copy(evento))
-        return avl, bst
-
-    # ------------------------------------------------------------------
-    # UPDATE
-    # ------------------------------------------------------------------
     def _actualizar(self):
-        if self.escenario.arbol_avl is None or self.escenario.arbol_avl.raiz is None:
-            self.canvas_avl.delete("all")
-            self.canvas_bst.delete("all")
-            self.lbl_info.config(text="No hay eventos activos.")
-            return
 
-        orden = self.combo_orden.get()
-        avl, bst = self._construir(self._eventos_en_orden(orden))
-        self._dibujar(self.canvas_avl, avl.raiz)
-        self._dibujar(self.canvas_bst, bst.raiz)
+        self.canvas_avl.delete("all")
+        self.canvas_bst.delete("all")
 
-        m_avl = Metricas.resumen(avl.raiz)
-        m_bst = Metricas.resumen(bst.raiz)
-        self.lbl_info.config(
-            text=f"AVL: altura {m_avl['altura']}, hojas {m_avl['hojas']}  |  "
-                 f"BST: altura {m_bst['altura']}, hojas {m_bst['hojas']}"
+        arbol_avl = self.escenario.arbol_avl
+        arbol_bst = self.escenario.arbol_bst
+
+        if arbol_avl is None:
+            self._dibujar_mensaje(
+                self.canvas_avl,
+                "No existe AVL"
+            )
+        else:
+            self._dibujar_arbol(
+                self.canvas_avl,
+                arbol_avl.raiz
+            )
+
+        if arbol_bst is None:
+            self._dibujar_mensaje(
+                self.canvas_bst,
+                "No existe BST"
+            )
+        else:
+            self._dibujar_arbol(
+                self.canvas_bst,
+                arbol_bst.raiz
+            )
+
+        self._actualizar_metricas(
+            arbol_avl,
+            arbol_bst
         )
-        self._llenar_tabla()
 
-    def _fila(self, orden, estructura, m):
-        return (
-            orden, estructura, m["nodos"], m["altura"], m["hojas"],
-            f"{m['comparaciones_promedio']:.2f}", m["comparaciones_maximo"], m["comparaciones_total"],
+    # ==============================================================
+    # MÉTRICAS
+    # ==============================================================
+
+    def _actualizar_metricas(
+        self,
+        arbol_avl,
+        arbol_bst
+    ):
+
+        if (
+            arbol_avl is None
+            or arbol_avl.raiz is None
+        ):
+
+            texto_avl = "AVL: árbol vacío"
+
+        else:
+
+            metricas_avl = Metricas.resumen(
+                arbol_avl.raiz
+            )
+
+            texto_avl = (
+                f"Nodos: {metricas_avl['nodos']}\n"
+                f"Altura: {metricas_avl['altura']}\n"
+                f"Hojas: {metricas_avl['hojas']}\n"
+                f"Comparaciones promedio: "
+                f"{metricas_avl['comparaciones_promedio']:.2f}\n"
+                f"Comparaciones máximas: "
+                f"{metricas_avl['comparaciones_maximo']}\n"
+                f"Comparaciones totales: "
+                f"{metricas_avl['comparaciones_total']}"
+            )
+
+        if (
+            arbol_bst is None
+            or arbol_bst.raiz is None
+        ):
+
+            texto_bst = "BST: árbol vacío"
+
+        else:
+
+            metricas_bst = Metricas.resumen(
+                arbol_bst.raiz
+            )
+
+            texto_bst = (
+                f"Nodos: {metricas_bst['nodos']}\n"
+                f"Altura: {metricas_bst['altura']}\n"
+                f"Hojas: {metricas_bst['hojas']}\n"
+                f"Comparaciones promedio: "
+                f"{metricas_bst['comparaciones_promedio']:.2f}\n"
+                f"Comparaciones máximas: "
+                f"{metricas_bst['comparaciones_maximo']}\n"
+                f"Comparaciones totales: "
+                f"{metricas_bst['comparaciones_total']}"
+            )
+
+        self.lbl_metricas_avl.config(
+            text=texto_avl
         )
 
-    def _llenar_tabla(self):
-        for item in self.tabla.get_children():
-            self.tabla.delete(item)
+        self.lbl_metricas_bst.config(
+            text=texto_bst
+        )
 
-        vivo = self.escenario.arbol_avl
-        etiqueta = "AVL vivo" + (" (modo estrés)" if vivo.modo_estres else "")
-        self.tabla.insert("", "end", values=self._fila("Estado actual del catálogo", etiqueta, Metricas.resumen(vivo.raiz)))
+    # ==============================================================
+    # DIBUJAR ÁRBOL
+    # ==============================================================
 
-        for orden in ORDENES:
-            avl, bst = self._construir(self._eventos_en_orden(orden))
-            self.tabla.insert("", "end", values=self._fila(orden, "AVL", Metricas.resumen(avl.raiz)))
-            self.tabla.insert("", "end", values=self._fila(orden, "BST", Metricas.resumen(bst.raiz)))
+    def _dibujar_arbol(
+        self,
+        canvas,
+        raiz
+    ):
 
-    # ------------------------------------------------------------------
-    # DRAWING (iterative, inorder layout: x = inorder index, y = depth)
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _posiciones(raiz):
-        posiciones = {}
-        pila = []
-        actual = raiz
-        profundidad = 0
-        indice = 0
-        while pila or actual is not None:
-            while actual is not None:
-                pila.append((actual, profundidad))
-                actual = actual.izquierda
-                profundidad += 1
-            actual, profundidad = pila.pop()
-            posiciones[id(actual)] = (indice, profundidad)
-            indice += 1
-            actual = actual.derecha
-            profundidad += 1
-        return posiciones
-
-    def _dibujar(self, canvas, raiz):
-        canvas.delete("all")
         if raiz is None:
-            canvas.create_text(150, 80, text="Árbol vacío", fill="gray")
+            self._dibujar_mensaje(
+                canvas,
+                "Árbol vacío"
+            )
             return
 
-        posiciones = self._posiciones(raiz)
+        posiciones = {}
 
-        def xy(nodo):
-            indice, profundidad = posiciones[id(nodo)]
-            return 30 + indice * DX, 30 + profundidad * DY
+        self._calcular_posiciones(
+            raiz,
+            posiciones,
+            0,
+            0
+        )
 
-        nodos = Metricas.nodos_por_niveles(raiz)
-        for nodo in nodos:
-            x, y = xy(nodo)
-            for hijo in (nodo.izquierda, nodo.derecha):
-                if hijo is not None:
-                    x2, y2 = xy(hijo)
-                    canvas.create_line(x, y, x2, y2, fill="gray", width=1)
+        # ----------------------------------------------------------
+        # Líneas
+        # ----------------------------------------------------------
 
-        for nodo in nodos:
-            x, y = xy(nodo)
-            evento = nodo.evento
-            fondo, borde, grosor = "#E1F5FE", "#0288D1", 2
-            if evento.prioridad == 3:
-                fondo, borde = "#FFCDD2", "#C62828"
-            if getattr(evento, "acceso_costoso", False):
-                borde, grosor = "#FF8F00", 4
-            canvas.create_oval(x - RADIO, y - RADIO, x + RADIO, y + RADIO, fill=fondo, outline=borde, width=grosor)
-            canvas.create_text(x, y, text=str(evento.id), font=("Arial", 7, "bold"))
+        self._dibujar_conexiones(
+            canvas,
+            raiz,
+            posiciones
+        )
 
-        canvas.configure(scrollregion=canvas.bbox("all"))
+        # ----------------------------------------------------------
+        # Nodos
+        # ----------------------------------------------------------
+
+        self._dibujar_nodos(
+            canvas,
+            raiz,
+            posiciones
+        )
+
+        # ----------------------------------------------------------
+        # Área desplazable
+        # ----------------------------------------------------------
+
+        bbox = canvas.bbox("all")
+
+        if bbox is not None:
+            margen = 50
+
+            canvas.configure(
+                scrollregion=(
+                    bbox[0] - margen,
+                    bbox[1] - margen,
+                    bbox[2] + margen,
+                    bbox[3] + margen
+                )
+            )
+
+    # ==============================================================
+    # POSICIONES
+    # ==============================================================
+
+    def _calcular_posiciones(
+        self,
+        nodo,
+        posiciones,
+        profundidad,
+        contador
+    ):
+
+        if nodo is None:
+            return contador
+
+        contador = self._calcular_posiciones(
+            nodo.izquierda,
+            posiciones,
+            profundidad + 1,
+            contador
+        )
+
+        posiciones[id(nodo)] = (
+            contador,
+            profundidad
+        )
+
+        contador += 1
+
+        contador = self._calcular_posiciones(
+            nodo.derecha,
+            posiciones,
+            profundidad + 1,
+            contador
+        )
+
+        return contador
+
+    def _obtener_coordenadas(
+        self,
+        nodo,
+        posiciones
+    ):
+
+        indice, profundidad = posiciones[
+            id(nodo)
+        ]
+
+        x = 60 + indice * DX
+        y = 60 + profundidad * DY
+
+        return x, y
+
+    # ==============================================================
+    # CONEXIONES
+    # ==============================================================
+
+    def _dibujar_conexiones(
+        self,
+        canvas,
+        nodo,
+        posiciones
+    ):
+
+        if nodo is None:
+            return
+
+        x, y = self._obtener_coordenadas(
+            nodo,
+            posiciones
+        )
+
+        if nodo.izquierda is not None:
+
+            x2, y2 = self._obtener_coordenadas(
+                nodo.izquierda,
+                posiciones
+            )
+
+            canvas.create_line(
+                x,
+                y,
+                x2,
+                y2,
+                fill="gray",
+                width=2
+            )
+
+        if nodo.derecha is not None:
+
+            x2, y2 = self._obtener_coordenadas(
+                nodo.derecha,
+                posiciones
+            )
+
+            canvas.create_line(
+                x,
+                y,
+                x2,
+                y2,
+                fill="gray",
+                width=2
+            )
+
+        self._dibujar_conexiones(
+            canvas,
+            nodo.izquierda,
+            posiciones
+        )
+
+        self._dibujar_conexiones(
+            canvas,
+            nodo.derecha,
+            posiciones
+        )
+
+    # ==============================================================
+    # NODOS
+    # ==============================================================
+
+    def _dibujar_nodos(
+        self,
+        canvas,
+        nodo,
+        posiciones
+    ):
+
+        if nodo is None:
+            return
+
+        x, y = self._obtener_coordenadas(
+            nodo,
+            posiciones
+        )
+
+        evento = nodo.evento
+
+        # Color normal del nodo
+        fondo = "#E8F4FD"
+        borde = "#1976D2"
+        ancho = 2
+
+        # Prioridad alta
+        if getattr(
+            evento,
+            "prioridad",
+            0
+        ) == 3:
+
+            fondo = "#FFCDD2"
+            borde = "#C62828"
+
+        canvas.create_oval(
+            x - RADIO,
+            y - RADIO,
+            x + RADIO,
+            y + RADIO,
+            fill=fondo,
+            outline=borde,
+            width=ancho
+        )
+
+        # ID del evento
+        canvas.create_text(
+            x,
+            y,
+            text=str(evento.id),
+            font=("Arial", 8, "bold")
+        )
+
+        self._dibujar_nodos(
+            canvas,
+            nodo.izquierda,
+            posiciones
+        )
+
+        self._dibujar_nodos(
+            canvas,
+            nodo.derecha,
+            posiciones
+        )
+
+    # ==============================================================
+    # MENSAJE ÁRBOL VACÍO
+    # ==============================================================
+
+    def _dibujar_mensaje(
+        self,
+        canvas,
+        mensaje
+    ):
+
+        canvas.create_text(
+            200,
+            100,
+            text=mensaje,
+            fill="gray",
+            font=("Arial", 12, "bold")
+        )
+
+        canvas.configure(
+            scrollregion=(0, 0, 500, 300)
+        )

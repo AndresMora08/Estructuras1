@@ -12,7 +12,7 @@ from Modelos.Estacion import Estacion
 from Modelos.Evento import Evento
 from Modelos.Zona import Zona
 from Logica.controlador_json import ControladorJSON
-
+from Modelos.BST import ArbolBST
 
 class Escenario:
 
@@ -23,6 +23,7 @@ class Escenario:
         epicentros: List[Epicentro] = None,
         reloj: Optional[Datetime] = None,
         arbol_avl: Optional[AVL] = None,
+        arbol_bst=None
     ):
         # None defaults avoid sharing mutable lists between instances
         self.zonas: List[Zona] = zonas if zonas is not None else []
@@ -31,7 +32,7 @@ class Escenario:
 
         self.reloj = reloj if reloj is not None else datetime.now(timezone.utc)
         self.arbol_avl = arbol_avl if arbol_avl is not None else AVL()
-        self.arbol_bst = None
+        self.arbol_bst = arbol_bst if arbol_bst is not None else ArbolBST()
         self.cola_reportes = deque()
         self.historico: List[Evento] = []
         self.dict_eventos: Dict[int, Evento] = {}
@@ -213,25 +214,45 @@ class Escenario:
         self.guardar_estado_pila()
         return funcion_modificadora(*args, **kwargs)
 
-    def eliminar_evento_por_id(self, id_evento: int) -> Tuple[bool, str]:
-        if id_evento not in self.dict_eventos:
-            return False, f"El evento ID {id_evento} no existe en los eventos activos."
+    def eliminar_evento_por_id(self, id_evento):
+    
+     if id_evento not in self.dict_eventos:
+        return False, "Evento no encontrado."
 
-        evento = self.dict_eventos[id_evento]
-        self.guardar_estado_pila()
-        try:
-            if self.arbol_avl and hasattr(evento, "clave"):
-                self.arbol_avl.eliminar(evento.clave, self.L)
+     evento = self.dict_eventos[id_evento]
 
-            del self.dict_eventos[id_evento]
-            evento.estado_catalogo = "Retirado"
-            self.historico.append(evento)
+     self.guardar_estado_pila()
 
-            return True, f"Evento SIS-{id_evento:06d} retirado del catálogo exitosamente."
-        except Exception as e:
-            # Restore the exact previous state: no partial changes
-            self.deshacer_ultima_accion()
-            return False, f"Error al eliminar el evento: {str(e)}"
+     try:
+        if hasattr(evento, "clave"):
+
+            if self.arbol_avl is not None:
+                self.arbol_avl.eliminar(
+                    evento.clave,
+                    self.L
+                )
+
+            if self.arbol_bst is not None:
+                self.arbol_bst.eliminar(
+                    evento.clave,
+                    self.L
+                )
+
+        del self.dict_eventos[id_evento]
+
+        evento.estado_catalogo = "Retirado"
+        self.historico.append(evento)
+
+        return True, (
+            f"SIS-{id_evento:06d} eliminado correctamente."
+        )
+
+     except Exception:
+        self.deshacer_ultima_accion()
+
+        return False, (
+            "No se pudo eliminar el evento."
+        )
 
     def archivar_evento_por_id(self, id_evento: int):
         if not self.arbol_avl or not self.arbol_avl.raiz:
@@ -262,14 +283,24 @@ class Escenario:
         self.guardar_estado_pila()
         try:
             for ev in eventos_a_archivar:
-                self.arbol_avl.eliminar(ev.clave, self.L)
-                if ev.id in self.dict_eventos:
-                    del self.dict_eventos[ev.id]
-                ev.estado_catalogo = "Archivado"
-                self.historico.append(ev)
+    
+              if self.arbol_avl is not None:
+                 self.arbol_avl.eliminar(
+                   ev.clave,
+                  self.L
+                  )
 
-            self.metricas_reportes["archivos_masivos"] += 1
-            self.metricas_reportes["eventos_archivados"] += cant_nodos
+            if self.arbol_bst is not None:
+              self.arbol_bst.eliminar(
+              ev.clave,
+              self.L
+            )
+
+            if ev.id in self.dict_eventos:
+                del self.dict_eventos[ev.id]
+
+            ev.estado_catalogo = "Archivado"
+            self.historico.append(ev)
         except Exception as e:
             self.deshacer_ultima_accion()
             return False, f"Error al archivar la rama: {str(e)}", None
