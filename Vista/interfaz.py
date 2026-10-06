@@ -12,7 +12,7 @@ from Vista.VentanaParametros import VentanaParametros
 from Vista.VentanaComparativaBST import VentanaComparativaBST
 from Vista.VisualizadorAVL import VisualizadorAVL
 from Vista.Mapa import Mapa
-
+from Vista.VentanaEventosEstado import VentanaEventosEstado
 
 class SismoLabGUI(
     FormulariosMixin,
@@ -66,6 +66,7 @@ class SismoLabGUI(
             ],
             "Consultas y Asociaciones": [
                 ("Consultar Eventos", self._abrir_busqueda),
+                 ("Eventos Activos e Histórico", self.abrir_ventana_eventos_estado),
                 ("Procesar Reportes", self.abrir_ventana_reportes),
                 ("Asociaciones", self.abrir_ventana_asociaciones),
                 ("Parámetros W, R, L, T", self.abrir_ventana_parametros),
@@ -209,3 +210,10 @@ class SismoLabGUI(
     def abrir_plano_geografico(self):
         """Opens the geographic map window."""
         Mapa(self.root, self.escenario)
+    
+    def abrir_ventana_eventos_estado(self):
+    
+     VentanaEventosEstado(
+        self.root,
+        self.escenario
+    )
