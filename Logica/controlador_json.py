@@ -226,6 +226,31 @@ class ControladorJSON:
             for e in estaciones
         ]
 
+    @staticmethod
+    def _recolectar_epicentros(escenario) -> List[dict]:
+        """Catalog epicenters + every epicenter used by an event (active, history or queued)."""
+        vistos = set()
+        resultado: List[dict] = []
+
+        def agregar(epicentro) -> None:
+            if epicentro is None:
+                return
+            clave = (round(epicentro.x, 1), round(epicentro.y, 1))
+            if clave in vistos:
+                return
+            vistos.add(clave)
+            resultado.append({"x": clave[0], "y": clave[1]})
+
+        for epicentro in escenario.epicentros:
+            agregar(epicentro)
+        for evento in escenario.dict_eventos.values():
+            agregar(evento.epicentro)
+        for evento in escenario.historico:
+            agregar(evento.epicentro)
+        for reporte in escenario.cola_reportes:
+            agregar(reporte.evento.epicentro)
+        return resultado
+
     @classmethod
     def _serializar_arbol(cls, raiz) -> dict:
         """Preorder traversal (iterative) into a flat node table with explicit links."""
@@ -258,6 +283,37 @@ class ControladorJSON:
         return {"raiz": raiz.evento.id, "nodos": nodos}
 
     @staticmethod
+    def _serializar_arbol_bst(raiz) -> dict:
+        """
+        Real topology of the comparison BST: root id and, for every node, the ids of its left
+        and right children (null = empty link). The event data is NOT repeated: the BST holds
+        exactly the active events already described in 'arbol_activo'.
+        """
+        if raiz is None:
+            return {"raiz": None, "nodos": []}
+
+        nodos = []
+        vistos = set()
+        pila = [raiz]
+        while pila:
+            nodo = pila.pop()
+            if id(nodo) in vistos:
+                continue  # safety guard against corrupted in-memory cycles
+            vistos.add(id(nodo))
+            izquierda = getattr(nodo, "izquierda", None)
+            derecha = getattr(nodo, "derecha", None)
+            nodos.append({
+                "id_evento": nodo.evento.id,
+                "izquierdo": izquierda.evento.id if izquierda is not None else None,
+                "derecho": derecha.evento.id if derecha is not None else None,
+            })
+            if derecha is not None:
+                pila.append(derecha)
+            if izquierda is not None:
+                pila.append(izquierda)
+        return {"raiz": raiz.evento.id, "nodos": nodos}
+
+    @staticmethod
     def _nodos_por_niveles(raiz) -> list:
         """Level-order list of nodes. Re-inserting in this order rebuilds the same BST shape."""
         resultado = []
@@ -276,6 +332,28 @@ class ControladorJSON:
         return resultado
 
     @classmethod
+    def _eventos_en_orden_de_insercion(cls, escenario) -> List[Evento]:
+        """
+        Active events in the order used by the 'insertions' file.
+        Level order of the BST: inserting in this order into an empty BST rebuilds exactly the
+        same BST (the AVL is rebuilt with balancing from the same sequence).
+        Any active event missing from the BST is appended using the AVL level order.
+        """
+        activos = escenario.dict_eventos
+        ordenados: List[Evento] = []
+        vistos = set()
+
+        bst = getattr(escenario, "arbol_bst", None)
+        arbol = getattr(escenario, "arbol_avl", None)
+        for raiz in (bst.raiz if bst else None, arbol.raiz if arbol else None):
+            for nodo in cls._nodos_por_niveles(raiz):
+                evento = nodo.evento
+                if evento.id in activos and evento.id not in vistos:
+                    vistos.add(evento.id)
+                    ordenados.append(evento)
+        return ordenados
+
+    @classmethod
     def _serializar_cabecera(cls, escenario, tipo: str) -> dict:
         arbol = getattr(escenario, "arbol_avl", None)
         return {
@@ -291,13 +369,14 @@ class ControladorJSON:
             "modo_ejecucion": {"modo_estres": bool(arbol and arbol.modo_estres)},
             "zonas": cls._serializar_zonas(escenario.zonas),
             "estaciones": cls._serializar_estaciones(escenario.estaciones),
-            "epicentros": [{"x": e.x, "y": e.y} for e in escenario.epicentros],
+            "epicentros": cls._recolectar_epicentros(escenario),
         }
 
     @classmethod
     def construir_diccionario_topologia(cls, escenario) -> dict:
-        """Full operational state: real tree topology, history, queue, clock, params and metrics."""
+        """Full operational state: real topology of the AVL AND the BST, history, queue, clock, params, metrics."""
         arbol = getattr(escenario, "arbol_avl", None)
+        bst = getattr(escenario, "arbol_bst", None)
         datos = cls._serializar_cabecera(escenario, TIPO_TOPOLOGIA)
 
         cola = []
@@ -312,6 +391,7 @@ class ControladorJSON:
         rotaciones = arbol.conteo_rotaciones if arbol else {}
 
         datos["arbol_activo"] = cls._serializar_arbol(arbol.raiz if arbol else None)
+        datos["arbol_bst"] = cls._serializar_arbol_bst(bst.raiz if bst else None)
         datos["historico"] = [cls._serializar_evento(e) for e in escenario.historico]
         datos["cola_reportes"] = cola
         datos["metricas"] = {
@@ -322,40 +402,52 @@ class ControladorJSON:
 
     @classmethod
     def construir_diccionario_inserciones(cls, escenario) -> dict:
-        """Active events in level order, ready for the 'load by insertions' mode."""
-        arbol = getattr(escenario, "arbol_avl", None)
-        raiz = arbol.raiz if arbol else None
+        """Active events in BST level order, ready for the 'load by insertions' mode."""
         datos = cls._serializar_cabecera(escenario, TIPO_INSERCIONES)
         datos["modo_ejecucion"] = {"modo_estres": False}  # insertion load always balances
-        datos["eventos"] = [cls._serializar_evento(n.evento) for n in cls._nodos_por_niveles(raiz)]
+        datos["eventos"] = [
+            cls._serializar_evento(evento) for evento in cls._eventos_en_orden_de_insercion(escenario)
+        ]
         return datos
 
     # =========================================================================
     # 4. SAVE (with dialogs)
     # =========================================================================
+    @staticmethod
+    def _ids_de_arbol(raiz) -> Tuple[set, List[str]]:
+        """Event ids of a tree (iterative). Returns (ids, structural problems)."""
+        ids = set()
+        problemas: List[str] = []
+        if raiz is None:
+            return ids, problemas
+        vistos = set()
+        pila = [raiz]
+        while pila:
+            nodo = pila.pop()
+            if id(nodo) in vistos:
+                problemas.append("El árbol contiene un ciclo.")
+                break
+            vistos.add(id(nodo))
+            if nodo.evento.id in ids:
+                problemas.append(f"SIS-{nodo.evento.id:06d} aparece en más de un nodo del árbol.")
+            ids.add(nodo.evento.id)
+            izquierda = getattr(nodo, "izquierda", None)
+            derecha = getattr(nodo, "derecha", None)
+            if izquierda is not None:
+                pila.append(izquierda)
+            if derecha is not None:
+                pila.append(derecha)
+        return ids, problemas
+
     @classmethod
     def diagnosticar_antes_de_guardar(cls, escenario) -> List[str]:
         """Detects in-memory inconsistencies that would produce a file that cannot be reloaded."""
         problemas: List[str] = []
         arbol = getattr(escenario, "arbol_avl", None)
-        ids_arbol = set()
+        bst = getattr(escenario, "arbol_bst", None)
 
-        if arbol is not None and arbol.raiz is not None:
-            vistos = set()
-            pila = [arbol.raiz]
-            while pila:
-                nodo = pila.pop()
-                if id(nodo) in vistos:
-                    problemas.append("El árbol contiene un ciclo.")
-                    break
-                vistos.add(id(nodo))
-                if nodo.evento.id in ids_arbol:
-                    problemas.append(f"SIS-{nodo.evento.id:06d} aparece en más de un nodo del árbol.")
-                ids_arbol.add(nodo.evento.id)
-                if nodo.izquierda is not None:
-                    pila.append(nodo.izquierda)
-                if nodo.derecha is not None:
-                    pila.append(nodo.derecha)
+        ids_arbol, problemas_arbol = cls._ids_de_arbol(arbol.raiz if arbol else None)
+        problemas.extend(f"AVL: {p}" for p in problemas_arbol)
 
         ids_diccionario = set(escenario.dict_eventos.keys())
         for id_evento in sorted(ids_diccionario - ids_arbol):
@@ -363,9 +455,27 @@ class ControladorJSON:
         for id_evento in sorted(ids_arbol - ids_diccionario):
             problemas.append(f"SIS-{id_evento:06d} está en el árbol AVL pero no en eventos activos.")
 
+        # The BST must hold exactly the same active events as the AVL
+        ids_bst, problemas_bst = cls._ids_de_arbol(bst.raiz if bst else None)
+        problemas.extend(f"BST: {p}" for p in problemas_bst)
+        for id_evento in sorted(ids_arbol - ids_bst):
+            problemas.append(f"SIS-{id_evento:06d} está en el AVL pero no en el BST.")
+        for id_evento in sorted(ids_bst - ids_arbol):
+            problemas.append(f"SIS-{id_evento:06d} está en el BST pero no en el AVL.")
+
         ids_historico = [e.id for e in escenario.historico]
         for id_evento in sorted(set(ids_historico) & ids_diccionario):
             problemas.append(f"SIS-{id_evento:06d} está a la vez en eventos activos y en el histórico.")
+
+        # A file with events must be complete, otherwise it is rejected when loaded
+        hay_eventos = bool(ids_diccionario) or bool(ids_historico) or bool(escenario.cola_reportes)
+        if hay_eventos:
+            if not escenario.zonas:
+                problemas.append("No hay zonas definidas: el archivo sería rechazado al cargarse.")
+            if not escenario.estaciones:
+                problemas.append("No hay estaciones definidas: el archivo sería rechazado al cargarse.")
+            if not cls._recolectar_epicentros(escenario):
+                problemas.append("No hay epicentros definidos: el archivo sería rechazado al cargarse.")
         return problemas
 
     @classmethod
@@ -404,7 +514,7 @@ class ControladorJSON:
 
     @classmethod
     def guardar_para_inserciones(cls, escenario, parent_window=None) -> bool:
-        """Saves the active events in level order (insertion mode)."""
+        """Saves the active events in insertion order (insertion mode)."""
         return cls._guardar_con_dialogo(
             escenario, parent_window, "Guardar Eventos para Carga por Inserciones", cls.construir_diccionario_inserciones
         )
@@ -412,6 +522,19 @@ class ControladorJSON:
     # =========================================================================
     # 5. VALIDATION BUILDERS (dict -> model objects, collecting every error)
     # =========================================================================
+    @classmethod
+    def _validar_catalogos_presentes(cls, datos: dict, hay_eventos: bool, ctx) -> None:
+        """A file with events must define zones, stations and epicenters (and not be empty)."""
+        if not hay_eventos:
+            return
+        for clave in ("zonas", "estaciones", "epicentros"):
+            valor = datos.get(clave)
+            if clave not in datos or (isinstance(valor, list) and not valor):
+                ctx.error(
+                    f"El archivo contiene eventos pero no define '{clave}' (falta o está vacío). "
+                    "El archivo debe estar completo: zonas, estaciones y epicentros."
+                )
+
     @classmethod
     def _crear_zona(cls, datos, ctx, etiqueta: str, nombres_usados: set) -> Optional[Zona]:
         if not isinstance(datos, dict):
@@ -747,7 +870,7 @@ class ControladorJSON:
         return reportes, rotaciones
 
     # =========================================================================
-    # 6. TOPOLOGY: validation and reconstruction (no re-insertions)
+    # 6. TOPOLOGY: validation and reconstruction (no re-insertions for the AVL)
     # =========================================================================
     @classmethod
     def _reconstruir_arbol(cls, datos_arbol, ctx):
@@ -890,6 +1013,155 @@ class ControladorJSON:
         return raiz, desbalanceado, eventos_activos
 
     @classmethod
+    def _reconstruir_bst(cls, datos_bst, activos: Dict[int, Evento], ctx) -> Optional[ArbolBST]:
+        """
+        Rebuilds the comparison BST from its STORED topology (it is NOT derived from the AVL).
+
+        1. Validates the stored links: same events as the AVL, single parent, no cycles,
+           every node reachable from the root and global order by K = (P, M, I).
+        2. Inserts the nodes in PREORDER: in a plain BST this reproduces exactly the stored shape.
+        3. Compares the rebuilt structure against the stored links (any difference rejects the load).
+        """
+        errores_iniciales = len(ctx.errores)
+
+        if datos_bst is None:
+            datos_bst = {"raiz": None, "nodos": []}
+        if not isinstance(datos_bst, dict) or not isinstance(datos_bst.get("nodos"), list):
+            ctx.error("'arbol_bst' debe ser null o un objeto con la lista 'nodos' y la clave 'raiz'.")
+            return None
+
+        # Stored links: id -> (left id, right id)
+        enlaces: Dict[int, Tuple[Optional[int], Optional[int]]] = {}
+        for indice, entrada in enumerate(datos_bst["nodos"]):
+            etiqueta = f"BST nodo #{indice + 1}"
+            if not isinstance(entrada, dict):
+                ctx.error(f"{etiqueta}: debe ser un objeto JSON.")
+                continue
+            id_nodo = cls._a_entero(entrada.get("id_evento"))
+            if id_nodo is None or id_nodo not in activos:
+                ctx.error(f"{etiqueta}: 'id_evento' {entrada.get('id_evento')!r} no corresponde a un evento activo.")
+                continue
+            if id_nodo in enlaces:
+                ctx.error(f"BST: SIS-{id_nodo:06d} aparece en más de una posición.")
+                continue
+            hijos: List[Optional[int]] = []
+            for lado in ("izquierdo", "derecho"):
+                bruto = entrada.get(lado)
+                if bruto is None:
+                    hijos.append(None)
+                    continue
+                destino = cls._a_entero(bruto)
+                if destino is None:
+                    ctx.error(f"BST SIS-{id_nodo:06d}: enlace {lado} inválido ({bruto!r}).")
+                hijos.append(destino)
+            enlaces[id_nodo] = (hijos[0], hijos[1])
+
+        for id_evento in sorted(set(activos) - set(enlaces)):
+            ctx.error(f"BST: falta el evento activo SIS-{id_evento:06d} (el BST debe tener los mismos eventos que el AVL).")
+
+        padres: Dict[int, int] = {}
+        for id_nodo, (izquierdo, derecho) in enlaces.items():
+            for lado, destino in (("izquierdo", izquierdo), ("derecho", derecho)):
+                if destino is None:
+                    continue
+                if destino not in enlaces:
+                    ctx.error(f"BST SIS-{id_nodo:06d}: el enlace {lado} apunta a un nodo inexistente ({destino}).")
+                elif destino == id_nodo:
+                    ctx.error(f"BST SIS-{id_nodo:06d}: el enlace {lado} apunta a sí mismo.")
+                elif destino in padres:
+                    ctx.error(
+                        f"BST SIS-{destino:06d}: tiene más de un padre "
+                        f"(SIS-{padres[destino]:06d} y SIS-{id_nodo:06d})."
+                    )
+                else:
+                    padres[destino] = id_nodo
+
+        id_raiz = datos_bst.get("raiz")
+        raiz: Optional[int] = None
+        if id_raiz is None:
+            if enlaces:
+                ctx.error("El BST tiene nodos pero 'raiz' es null.")
+        else:
+            id_raiz = cls._a_entero(id_raiz)
+            if id_raiz is None or id_raiz not in enlaces:
+                ctx.error("BST: 'raiz' no corresponde a ningún nodo del árbol.")
+            elif id_raiz in padres:
+                ctx.error(f"BST: la raíz SIS-{id_raiz:06d} aparece como hijo de SIS-{padres[id_raiz]:06d} (ciclo).")
+            else:
+                raiz = id_raiz
+
+        if len(ctx.errores) > errores_iniciales:
+            return None
+        if raiz is None:
+            return ArbolBST()  # empty tree (and there are no active events)
+
+        # Reachability + preorder (also detects cycles among unreachable nodes)
+        preorden: List[int] = []
+        visitados = set()
+        pila = [raiz]
+        while pila:
+            id_nodo = pila.pop()
+            if id_nodo in visitados:
+                ctx.error(f"BST: SIS-{id_nodo:06d} aparece en más de una posición.")
+                continue
+            visitados.add(id_nodo)
+            preorden.append(id_nodo)
+            izquierdo, derecho = enlaces[id_nodo]
+            if derecho is not None:
+                pila.append(derecho)
+            if izquierdo is not None:
+                pila.append(izquierdo)
+        if len(preorden) != len(enlaces):
+            huerfanos = sorted(set(enlaces) - set(preorden))
+            ctx.error(
+                "BST: nodos no alcanzables desde la raíz (ciclo o enlaces rotos): "
+                + ", ".join(f"SIS-{i:06d}" for i in huerfanos[:10])
+            )
+            return None
+
+        # Global order by K
+        pila_orden = [(raiz, None, None)]
+        while pila_orden:
+            id_nodo, minimo, maximo = pila_orden.pop()
+            clave = activos[id_nodo].clave
+            if (minimo is not None and clave <= minimo) or (maximo is not None and clave >= maximo):
+                ctx.error(f"BST SIS-{id_nodo:06d}: la clave {clave} viola el orden BST global.")
+            izquierdo, derecho = enlaces[id_nodo]
+            if izquierdo is not None:
+                pila_orden.append((izquierdo, minimo, clave))
+            if derecho is not None:
+                pila_orden.append((derecho, clave, maximo))
+        if len(ctx.errores) > errores_iniciales:
+            return None
+
+        # Rebuild in preorder: it reproduces the stored shape exactly
+        arbol_bst = ArbolBST()
+        for id_nodo in preorden:
+            arbol_bst.insertar(activos[id_nodo])
+
+        # Final check: the rebuilt structure must be identical to the stored one
+        reconstruidos: Dict[int, Tuple[Optional[int], Optional[int]]] = {}
+        pendientes = [arbol_bst.raiz] if arbol_bst.raiz is not None else []
+        while pendientes:
+            nodo = pendientes.pop()
+            izquierda = getattr(nodo, "izquierda", None)
+            derecha = getattr(nodo, "derecha", None)
+            reconstruidos[nodo.evento.id] = (
+                izquierda.evento.id if izquierda is not None else None,
+                derecha.evento.id if derecha is not None else None,
+            )
+            if izquierda is not None:
+                pendientes.append(izquierda)
+            if derecha is not None:
+                pendientes.append(derecha)
+
+        raiz_reconstruida = arbol_bst.raiz.evento.id if arbol_bst.raiz is not None else None
+        if reconstruidos != enlaces or raiz_reconstruida != raiz:
+            ctx.error("BST: la estructura reconstruida no coincide con los enlaces almacenados.")
+            return None
+        return arbol_bst
+
+    @classmethod
     def _construir_historico(cls, lista, ctx) -> Dict[int, Evento]:
         historico: Dict[int, Evento] = {}
         if not isinstance(lista, list):
@@ -939,7 +1211,10 @@ class ControladorJSON:
 
     @classmethod
     def _construir_bst_desde_arbol(cls, raiz) -> ArbolBST:
-        """Comparison BST: same events inserted in level order (same comparator, no balancing)."""
+        """
+        LEGACY fallback (files saved before the BST was stored): the BST is rebuilt with the
+        AVL level order, so it ends up with the same shape as the AVL.
+        """
         bst = ArbolBST()
         for nodo in cls._nodos_por_niveles(raiz):
             bst.insertar(nodo.evento)
@@ -970,14 +1245,37 @@ class ControladorJSON:
 
         ctx = _ContextoCarga(reloj)
         ctx.errores.extend(errores_reloj)
+
+        # The file must be complete when it carries events
+        datos_arbol = datos.get(clave_arbol)
+        nodos_arbol = datos_arbol.get("nodos") if isinstance(datos_arbol, dict) else None
+        hay_eventos = bool(nodos_arbol) or bool(datos.get("historico")) or bool(datos.get("cola_reportes"))
+        cls._validar_catalogos_presentes(datos, hay_eventos, ctx)
+
         cls._construir_zonas(datos.get("zonas", []), ctx)
         cls._construir_estaciones(datos.get("estaciones", []), ctx)
         epicentros = cls._construir_epicentros(datos.get("epicentros", []), ctx)
         parametros = cls._leer_parametros(datos.get("parametros"), escenario, ctx)
         if ctx.errores:
-            return None, ctx.errores, []
+            return None, ctx.errores, []  # catalogs are the base of every other check
 
+        errores_antes_del_arbol = len(ctx.errores)
         raiz, desbalanceado, activos = cls._reconstruir_arbol(datos.get(clave_arbol), ctx)
+        arbol_sin_errores = len(ctx.errores) == errores_antes_del_arbol
+
+        advertencias: List[str] = []
+
+        # Comparison BST: stored topology (legacy files fall back to the AVL order)
+        arbol_bst: Optional[ArbolBST] = None
+        if "arbol_bst" in datos:
+            if arbol_sin_errores:
+                arbol_bst = cls._reconstruir_bst(datos.get("arbol_bst"), activos, ctx)
+        else:
+            advertencias.append(
+                "El archivo no incluye el BST (guardado con una versión anterior): se reconstruyó con "
+                "el orden del AVL, por lo que puede no coincidir con el BST original. "
+                "Vuelva a guardar el escenario para conservarlo."
+            )
 
         historico = cls._construir_historico(datos.get("historico", []), ctx)
         cola = cls._construir_cola(datos.get("cola_reportes", []), ctx)
@@ -997,7 +1295,6 @@ class ControladorJSON:
         arbol_actual = getattr(escenario, "arbol_avl", None)
         modo_estres = modo_archivo or bool(arbol_actual and arbol_actual.modo_estres)
 
-        advertencias: List[str] = []
         if desbalanceado and not modo_estres:
             ctx.error(
                 "La topología está ordenada pero desbalanceada: solo puede cargarse con el "
@@ -1023,7 +1320,7 @@ class ControladorJSON:
             "reloj": reloj,
             "parametros": parametros,
             "arbol_avl": arbol,
-            "arbol_bst": cls._construir_bst_desde_arbol(raiz),
+            "arbol_bst": arbol_bst if arbol_bst is not None else cls._construir_bst_desde_arbol(raiz),
             "dict_eventos": activos,
             "historico": list(historico.values()),
             "cola": cola,
@@ -1036,38 +1333,41 @@ class ControladorJSON:
     # =========================================================================
     @classmethod
     def validar_inserciones(cls, datos, escenario) -> Tuple[Optional[dict], List[str]]:
-        """Builds the AVL (balanced) and the BST with the same insertion order. Nothing is applied."""
-        if isinstance(datos, list):
-            seccion: dict = {}
-            lista_eventos = datos
-        elif isinstance(datos, dict):
-            seccion = datos
-            lista_eventos = datos.get("eventos")
-            if seccion.get("version", VERSION_ESQUEMA) != VERSION_ESQUEMA:
-                return None, [f"Versión de esquema no soportada: {seccion.get('version')}."]
-        else:
-            return None, ["El archivo de inserciones debe ser una lista o un objeto JSON con 'eventos'."]
+        """
+        Builds the AVL (balanced) and the BST with the same insertion order. Nothing is applied.
+        The file must be complete: zones, stations, epicenters and events.
+        """
+        if not isinstance(datos, dict):
+            return None, [
+                "El archivo de inserciones debe ser un objeto JSON completo con 'zonas', "
+                "'estaciones', 'epicentros' y 'eventos'. Una lista suelta de eventos no se acepta."
+            ]
+        if datos.get("version", VERSION_ESQUEMA) != VERSION_ESQUEMA:
+            return None, [f"Versión de esquema no soportada: {datos.get('version')}."]
+
+        lista_eventos = datos.get("eventos")
         if not isinstance(lista_eventos, list):
             return None, ["'eventos' debe ser una lista de eventos."]
+        if not lista_eventos:
+            return None, ["La secuencia de eventos está vacía: no hay nada que cargar."]
 
         reloj = cls._normalizar_reloj(escenario.reloj)
         errores_reloj: List[str] = []
-        if "reloj" in seccion:
-            reloj_leido = cls._parsear_fecha(seccion["reloj"])
+        if "reloj" in datos:
+            reloj_leido = cls._parsear_fecha(datos["reloj"])
             if reloj_leido is None:
                 errores_reloj.append("'reloj' debe tener formato 2026-09-07T10:00:00Z.")
             else:
                 reloj = reloj_leido
 
-        ctx = _ContextoCarga(reloj, escenario.zonas, escenario.estaciones)
+        ctx = _ContextoCarga(reloj)
         ctx.errores.extend(errores_reloj)
-        epicentros = list(escenario.epicentros)
+        cls._validar_catalogos_presentes(datos, True, ctx)
 
-        if "zonas" in seccion or "estaciones" in seccion:
-            cls._construir_zonas(seccion.get("zonas", []), ctx)
-            cls._construir_estaciones(seccion.get("estaciones", []), ctx)
-            epicentros = cls._construir_epicentros(seccion.get("epicentros", []), ctx)
-        parametros = cls._leer_parametros(seccion.get("parametros"), escenario, ctx)
+        cls._construir_zonas(datos.get("zonas", []), ctx)
+        cls._construir_estaciones(datos.get("estaciones", []), ctx)
+        epicentros = cls._construir_epicentros(datos.get("epicentros", []), ctx)
+        parametros = cls._leer_parametros(datos.get("parametros"), escenario, ctx)
         if ctx.errores:
             return None, ctx.errores
 
@@ -1290,7 +1590,10 @@ class ControladorJSON:
             f"Eventos activos: {len(estado['dict_eventos'])}\n"
             f"Eventos en histórico: {len(estado['historico'])}\n"
             f"Reportes en cola: {len(estado['cola'])}\n"
-            f"Modo estrés: {'ACTIVO' if estado['arbol_avl'].modo_estres else 'normal'}"
+            f"Modo estrés: {'ACTIVO' if estado['arbol_avl'].modo_estres else 'normal'}\n\n"
+            + cls._resumen_arbol("Árbol AVL:", estado["arbol_avl"].raiz)
+            + "\n\n"
+            + cls._resumen_arbol("Árbol BST:", estado["arbol_bst"].raiz)
         )
         if advertencias:
             mensaje += "\n\n" + "\n".join(advertencias)
