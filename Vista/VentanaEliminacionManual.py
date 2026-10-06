@@ -1,3 +1,4 @@
+
 import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Callable, Dict, Optional
@@ -22,14 +23,14 @@ class VentanaEliminacionManual:
         self.escenario = escenario
         self.callback_al_eliminar = callback_al_eliminar
 
-        # Configuración de la ventana modal
+        # Modal window configuration
         self.ventana = tk.Toplevel(parent_window)
         self.ventana.title("Gestión y Eliminación de Evento")
         self.ventana.geometry("380x320")
         self.ventana.resizable(False, False)
         self.ventana.grab_set()
 
-        # Etiqueta principal con el ID del evento
+        # Main label with the event ID
         id_evt = getattr(self.evento, "id_evento", getattr(self.evento, "id", 0))
         ttk.Label(
             self.ventana,
@@ -37,18 +38,18 @@ class VentanaEliminacionManual:
             font=("Arial", 11, "bold"),
         ).pack(pady=15)
 
-        # Marco contenedor para los botones de acción
+        # Container frame for the action buttons
         f_acciones = ttk.Frame(self.ventana)
         f_acciones.pack(fill=tk.BOTH, expand=True, padx=20)
 
-        # 1. BOTÓN ELIMINAR
+        # 1. DELETE BUTTON
         btn_eliminar = ttk.Button(
             f_acciones, text="🗑️ Eliminar Evento", command=self._ejecutar_eliminacion
         )
         btn_eliminar.pack(fill=tk.X, pady=8)
 
       
-        # Botón inferior para cerrar
+        # Bottom button to close
         ttk.Button(
             self.ventana, text="Cancelar", command=self.ventana.destroy
         ).pack(pady=10)
@@ -66,11 +67,11 @@ class VentanaEliminacionManual:
         ):
             return
 
-        # Delegación de la lógica de negocio al Escenario
+        # Delegate business logic to the Scenario
         exito, mensaje = self.escenario.eliminar_evento_por_id(id_evt)
 
         if exito:
-            # --- NUEVO: Recalcular asociaciones tras eliminar ---
+            # --- NEW: Recalculate associations after deletion ---
             W_actual = getattr(self.escenario, "W", 48.0)
             R_actual = getattr(self.escenario, "R", 40.0)
             recalcular_asociaciones_escenario(self.escenario, W_actual, R_actual)
@@ -81,5 +82,3 @@ class VentanaEliminacionManual:
             self.callback_al_eliminar()
         else:
             messagebox.showerror("Error", mensaje, parent=self.ventana)
-
-  

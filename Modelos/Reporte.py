@@ -10,5 +10,5 @@ class Reporte:
     
     @property
     def id_evento(self) -> int:
-        """Acceso rápido y cómodo al ID del evento."""
+     
         return self.evento.id

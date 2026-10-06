@@ -1,9 +1,10 @@
+
 from Modelos.Evento import Evento
 from Modelos.Nodo import Nodo
 
 
 class ArbolBST:
-    """Árbol binario de búsqueda simple, sin balanceo."""
+    """Simple binary search tree, without balancing."""
 
     def __init__(self):
         self.raiz = None
@@ -16,10 +17,10 @@ class ArbolBST:
         actualizar: bool = True
     ) -> bool:
         """
-        Inserta un evento usando la misma clave/comparador del AVL.
+        Inserts an event using the same key/comparator as the AVL.
 
-        No realiza rotaciones porque el BST debe permanecer
-        desbalanceado cuando corresponda.
+        Does not perform rotations because the BST must remain
+        unbalanced when appropriate.
         """
         nuevo = Nodo(evento)
 
@@ -49,10 +50,10 @@ class ArbolBST:
 
     def buscar(self, clave):
         """
-        Busca una clave.
+        Searches for a key.
 
-        Retorna:
-            (nodo, cantidad_visitados)
+        Returns:
+            (node, number_of_visited_nodes)
         """
         visitados = 0
         actual = self.raiz
@@ -76,14 +77,14 @@ class ArbolBST:
         limite_L: int = 3
     ) -> bool:
         """
-        Elimina un nodo del BST.
+        Removes a node from the BST.
 
-        No realiza rotaciones.
+        Does not perform rotations.
         """
         padre = None
         actual = self.raiz
 
-        # Buscar nodo
+        # Search for the node
         while actual is not None and actual.clave != clave:
             padre = actual
 
@@ -96,7 +97,7 @@ class ArbolBST:
             return False
 
         # ----------------------------------------------------------
-        # CASO 1: nodo hoja
+        # CASE 1: leaf node
         # ----------------------------------------------------------
         if actual.izquierda is None and actual.derecha is None:
             self._reemplazar_hijo(
@@ -106,7 +107,7 @@ class ArbolBST:
             )
 
         # ----------------------------------------------------------
-        # CASO 2: solo hijo derecho
+        # CASE 2: only right child
         # ----------------------------------------------------------
         elif actual.izquierda is None:
             self._reemplazar_hijo(
@@ -116,7 +117,7 @@ class ArbolBST:
             )
 
         # ----------------------------------------------------------
-        # CASO 3: solo hijo izquierdo
+        # CASE 3: only left child
         # ----------------------------------------------------------
         elif actual.derecha is None:
             self._reemplazar_hijo(
@@ -126,7 +127,7 @@ class ArbolBST:
             )
 
         # ----------------------------------------------------------
-        # CASO 4: tiene dos hijos
+        # CASE 4: has two children
         # ----------------------------------------------------------
         else:
             sucesor_padre = actual
@@ -136,10 +137,10 @@ class ArbolBST:
                 sucesor_padre = sucesor
                 sucesor = sucesor.izquierda
 
-            # Copiamos el evento del sucesor
+            # Copy the successor's event
             actual.evento = sucesor.evento
 
-            # El sucesor tendrá como máximo hijo derecho
+            # The successor can have at most a right child
             if sucesor_padre.izquierda is sucesor:
                 sucesor_padre.izquierda = sucesor.derecha
             else:
@@ -153,9 +154,9 @@ class ArbolBST:
         nodo,
         nuevo_hijo
     ):
-        """Reemplaza el enlace del padre hacia un nodo."""
+        """Replaces the link from the parent to a node."""
 
-        # El nodo eliminado era la raíz
+        # The deleted node was the root
         if padre is None:
             self.raiz = nuevo_hijo
             return
@@ -166,7 +167,7 @@ class ArbolBST:
             padre.derecha = nuevo_hijo
 
     def altura(self) -> int:
-        """Retorna la altura del árbol. Árbol vacío = -1."""
+        """Returns the tree height. Empty tree = -1."""
 
         def calcular(nodo):
             if nodo is None:
@@ -181,10 +182,10 @@ class ArbolBST:
 
     def factor_balance(self, nodo) -> int:
         """
-        Calcula el factor de balance de un nodo.
+        Calculates the balance factor of a node.
 
-        Se incluye para mantener una interfaz útil similar al AVL,
-        aunque el BST no utiliza este valor para hacer rotaciones.
+        It is included to maintain a useful interface similar to the AVL,
+        although the BST does not use this value for rotations.
         """
 
         if nodo is None:
@@ -209,9 +210,9 @@ class ArbolBST:
         limite_L: int = 3
     ):
         """
-        Actualiza las alturas de los nodos del BST.
+        Updates the heights of the BST nodes.
 
-        No balancea ni rota el árbol.
+        Does not balance or rotate the tree.
         """
 
         def actualizar(nodo):
@@ -236,7 +237,7 @@ class ArbolBST:
         actualizar(self.raiz)
 
     def obtener_nodos(self):
-        """Retorna todos los nodos del BST en recorrido inorden."""
+        """Returns all BST nodes in in-order traversal."""
 
         resultado = []
 

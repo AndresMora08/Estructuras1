@@ -1,3 +1,4 @@
+
 from Modelos.AVL import AVL
 from Modelos.Evento import Evento
 from Modelos.Nodo import Nodo
@@ -11,19 +12,19 @@ class ControladorCorrecciones:
         self.escenario = escenario
 
     def verificacion_datos(self, evento_nuevo: Evento) -> bool:
-        # Magnitud
+        # Magnitude
         if not (-2.0 <= evento_nuevo.magnitud <= 10.0):
             return False
         if round(evento_nuevo.magnitud, 1) != evento_nuevo.magnitud:
             return False
 
-        # Profundidad
+        # Depth
         if not (0.0 <= evento_nuevo.profundidad <= 700.0):
             return False
         if round(evento_nuevo.profundidad, 1) != evento_nuevo.profundidad:
             return False
 
-        # Coordenadas Epicentro
+        # Epicenter Coordinates
         if evento_nuevo.epicentro is None:
             return False
 
@@ -41,14 +42,14 @@ class ControladorCorrecciones:
         self, evento_nuevo: Evento, evento_viejo: Evento
     ) -> bool:
 
-        # 1. Validar todos los datos resultantes antes de aplicar cambios
+        # 1. Validate all resulting data before applying changes
         if not self.verificacion_datos(evento_nuevo):
             return False
 
-        # 2. Recalcular prioridad y clave del nuevo evento
+        # 2. Recalculate priority and key of the new event
         evento_nuevo.calcular_prioridad()
 
-        # 3. Incrementar revisión y marcar como pendiente
+        # 3. Increment revision and mark as pending
         evento_nuevo.revision = evento_viejo.revision + 1
         evento_nuevo.estado = "Pendiente"
 
@@ -58,7 +59,7 @@ class ControladorCorrecciones:
         clave_vieja = evento_viejo.clave
         clave_nueva = evento_nuevo.clave
 
-        # 4. Caso A: La clave no cambió
+        # 4. Case A: The key did not change
         if clave_nueva == clave_vieja:
 
             evento_viejo.profundidad = evento_nuevo.profundidad
@@ -68,7 +69,7 @@ class ControladorCorrecciones:
             evento_viejo.estado = "Pendiente"
             evento_viejo.clave = clave_nueva
 
-        # 5. Caso B: La clave cambió
+        # 5. Case B: The key changed
         else:
 
             if self.arbol_avl or getattr(
@@ -81,14 +82,14 @@ class ControladorCorrecciones:
                     getattr(self.escenario, "L", 3)
                 )
 
-                # Eliminar del AVL
+                # Remove from the AVL
                 if self.arbol_avl is not None:
                     self.arbol_avl.eliminar(
                         clave_vieja,
                         limite_L
                     )
 
-                # Eliminar del BST
+                # Remove from the BST
                 if (
                     self.escenario is not None
                     and self.escenario.arbol_bst is not None
@@ -98,7 +99,7 @@ class ControladorCorrecciones:
                         limite_L
                     )
 
-                # Insertar en el AVL
+                # Insert into the AVL
                 if self.arbol_avl is not None:
                     nuevo_nodo = Nodo(evento_nuevo)
 
@@ -107,7 +108,7 @@ class ControladorCorrecciones:
                         limite_L
                     )
 
-                # Insertar en el BST
+                # Insert into the BST
                 if (
                     self.escenario is not None
                     and self.escenario.arbol_bst is not None
@@ -117,7 +118,7 @@ class ControladorCorrecciones:
                         limite_L
                     )
 
-                # Actualizar referencia en el diccionario
+                # Update the reference in the dictionary
                 self.dict_eventos[evento_viejo.id] = evento_nuevo
 
         return True

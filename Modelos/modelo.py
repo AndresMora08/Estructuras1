@@ -2,7 +2,7 @@
 
 class GestorDatos:
     def __init__(self):
-        # Datos iniciales de prueba (puedes adaptarlos a tus objetos Evento, Zona, etc.)
+        
         self.datos = [
             {"id": 1, "zona": "Manizales", "magnitud": 4.5, "epicentro": "Centro"},
             {"id": 2, "zona": "Villamaría", "magnitud": 3.2, "epicentro": "Rural"}

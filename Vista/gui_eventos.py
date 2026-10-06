@@ -1,3 +1,4 @@
+
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -9,7 +10,7 @@ from Vista.VisualizadorAVL import VisualizadorAVL
 class EventosMixin:
 
     # ==================================================================
-    # CONSULTA DE EVENTOS
+    # EVENT CONSULTATION
     # ==================================================================
 
     def _abrir_busqueda(self):
@@ -42,7 +43,7 @@ class EventosMixin:
         )
 
     # ==================================================================
-    # VISUALIZADOR AVL
+    # AVL TREE VISUALIZER
     # ==================================================================
 
     def _abrir_visualizador_arbol(self):
@@ -69,7 +70,7 @@ class EventosMixin:
         )
 
     # ==================================================================
-    # GESTIÓN Y JSON
+    # MANAGEMENT AND JSON
     # ==================================================================
 
     def abrir_ventana_gestion(self):
@@ -127,10 +128,10 @@ class EventosMixin:
         )
 
     # ==================================================================
-    # TABLA DE EVENTOS
+    # EVENT TABLE
     #
-    # Este método se conserva, pero ya no se ejecuta al iniciar
-    # la ventana principal.
+    # This method is preserved, but it is no longer executed when
+    # the main window starts.
     # ==================================================================
 
     def configurar_tabla_eventos(
@@ -204,7 +205,7 @@ class EventosMixin:
         )
 
     # ==================================================================
-    # ACTUALIZAR TABLA
+    # UPDATE TABLE
     # ==================================================================
 
     def actualizar_tabla_eventos(self):
@@ -216,7 +217,7 @@ class EventosMixin:
             return
 
         # --------------------------------------------------------------
-        # LIMPIAR TABLA
+        # CLEAR TABLE
         # --------------------------------------------------------------
 
         for item in self.tabla_eventos.get_children():
@@ -230,7 +231,7 @@ class EventosMixin:
             return
 
         # --------------------------------------------------------------
-        # OBTENER EVENTOS
+        # GET EVENTS
         # --------------------------------------------------------------
 
         eventos = []
@@ -300,7 +301,7 @@ class EventosMixin:
             eventos = self.escenario.eventos
 
         # --------------------------------------------------------------
-        # INSERTAR EVENTOS
+        # INSERT EVENTS
         # --------------------------------------------------------------
 
         for ev in eventos:
@@ -320,7 +321,7 @@ class EventosMixin:
             )
 
             # ----------------------------------------------------------
-            # FECHA
+            # DATE
             # ----------------------------------------------------------
 
             fecha = getattr(
@@ -334,7 +335,7 @@ class EventosMixin:
             )
 
             # ----------------------------------------------------------
-            # MAGNITUD
+            # MAGNITUDE
             # ----------------------------------------------------------
 
             magnitud = getattr(
@@ -344,7 +345,7 @@ class EventosMixin:
             )
 
             # ----------------------------------------------------------
-            # PROFUNDIDAD
+            # DEPTH
             # ----------------------------------------------------------
 
             profundidad = getattr(
@@ -354,7 +355,7 @@ class EventosMixin:
             )
 
             # ----------------------------------------------------------
-            # EPICENTRO
+            # EPICENTER
             # ----------------------------------------------------------
 
             epicentro = getattr(
@@ -407,7 +408,7 @@ class EventosMixin:
                 y = ""
 
             # ----------------------------------------------------------
-            # ESTADO
+            # STATUS
             # ----------------------------------------------------------
 
             estado = getattr(
@@ -430,7 +431,7 @@ class EventosMixin:
                 )
 
             # ----------------------------------------------------------
-            # REFERENCIA
+            # REFERENCE
             # ----------------------------------------------------------
 
             id_referencia = getattr(
@@ -450,7 +451,7 @@ class EventosMixin:
                 ref_str = "Ninguna (Principal)"
 
             # ----------------------------------------------------------
-            # INSERTAR
+            # INSERT INTO TABLE
             # ----------------------------------------------------------
 
             self.tabla_eventos.insert(

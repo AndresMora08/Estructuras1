@@ -1,3 +1,4 @@
+
 from typing import List, Optional
 
 from Modelos.Zona import Zona
@@ -19,7 +20,7 @@ class Epicentro:
             self.zona = None
             return
 
-        # Si alguna de las zonas coincidentes es poblada, se queda con esa
+        # If any of the matching zones is populated, it is selected
         zona_poblada = next((z for z in coincidentes if z.poblada), None)
 
         if zona_poblada:
@@ -30,7 +31,7 @@ class Epicentro:
 
     @property
     def es_poblada(self) -> bool:
-        """Facilita consultar directo si el epicentro es poblado sin romper si no hay zona."""
+        """Allows directly checking whether the epicenter is populated without breaking if there is no zone."""
         return self.zona.poblada if self.zona else False
 
     def __repr__(self):

@@ -1,3 +1,4 @@
+
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -9,9 +10,9 @@ from Vista.VentanaAsociaciones import VentanaAsociaciones
 class AsociacionesMixin:
 
     # ==================================================================
-    # ASOCIACIONES
+    # ASSOCIATIONS
     #
-    # La ventana se abre únicamente al presionar el botón.
+    # The window is opened only when the button is pressed.
     # ==================================================================
 
     def abrir_ventana_asociaciones(self):
@@ -33,9 +34,9 @@ class AsociacionesMixin:
         )
 
     # ==================================================================
-    # RECÁLCULO DE ASOCIACIONES
+    # ASSOCIATIONS RECALCULATION
     #
-    # Se conserva para compatibilidad con código existente.
+    # Kept for compatibility with existing code.
     # ==================================================================
 
     def ejecutar_recalculo_asociaciones(self):
@@ -102,10 +103,10 @@ class AsociacionesMixin:
             )
 
     # ==================================================================
-    # PANEL DE PARÁMETROS DE ASOCIACIÓN
+    # ASSOCIATION PARAMETERS PANEL
     #
-    # Se conserva por compatibilidad.
-    # No se llama desde __init__.
+    # Kept for compatibility.
+    # Not called from __init__.
     # ==================================================================
 
     def crear_paneles_parametros_asociacion(
@@ -187,7 +188,7 @@ class AsociacionesMixin:
         )
 
         # --------------------------------------------------------------
-        # BOTÓN RECALCULAR
+        # RECALCULATE BUTTON
         # --------------------------------------------------------------
 
         ttk.Button(
@@ -200,3 +201,4 @@ class AsociacionesMixin:
             padx=10,
             pady=5
         )
+

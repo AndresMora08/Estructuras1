@@ -1,0 +1,342 @@
+{
+  "formato": "sismolab-topologia",
+  "version": 1,
+  "parametros": {
+    "W": 48.0,
+    "R": 40.0,
+    "L": 3,
+    "T": 72.0
+  },
+  "reloj": "2026-10-05T12:00:00Z",
+  "modo_ejecucion": {
+    "modo_estres": false
+  },
+  "zonas": [
+    {
+      "nombre": "Zona_Pacifico",
+      "x_min": 0.0,
+      "x_max": 200.0,
+      "y_min": 0.0,
+      "y_max": 250.0,
+      "poblada": true
+    }
+  ],
+  "estaciones": [
+    {
+      "id_estacion": "EST_PAC_01",
+      "nombre": "Estacion Pacifico 01",
+      "x": 50.0,
+      "y": 100.0,
+      "zona": "Zona_Pacifico"
+    }
+  ],
+  "epicentros": [
+    {
+      "x": 40.0,
+      "y": 100.0
+    },
+    {
+      "x": 60.0,
+      "y": 150.0
+    },
+    {
+      "x": 80.0,
+      "y": 180.0
+    },
+    {
+      "x": 100.0,
+      "y": 120.0
+    },
+    {
+      "x": 120.0,
+      "y": 160.0
+    },
+    {
+      "x": 140.0,
+      "y": 190.0
+    },
+    {
+      "x": 160.0,
+      "y": 210.0
+    }
+  ],
+  "arbol_activo": {
+    "raiz": 3005,
+    "nodos": [
+      {
+        "evento": {
+          "id_evento": 3005,
+          "magnitud": 5.4,
+          "profundidad": 40.0,
+          "epicentro": {
+            "x": 120.0,
+            "y": 160.0
+          },
+          "estacion_origen": "EST_PAC_01",
+          "fecha_hora": "2026-10-05T09:00:00Z",
+          "revision": 1,
+          "estado_atencion": "Revisado",
+          "estado_catalogo": "Activo",
+          "id_referencia": null,
+          "estaciones": [
+            "EST_PAC_01"
+          ],
+          "prioridad": 2,
+          "clave": [
+            2,
+            5.4,
+            3005
+          ]
+        },
+        "izquierdo": 3004,
+        "derecho": 3006,
+        "altura": 2,
+        "factor_balance": 0
+      },
+      {
+        "evento": {
+          "id_evento": 3004,
+          "magnitud": 4.3,
+          "profundidad": 25.0,
+          "epicentro": {
+            "x": 100.0,
+            "y": 120.0
+          },
+          "estacion_origen": "EST_PAC_01",
+          "fecha_hora": "2026-10-05T08:00:00Z",
+          "revision": 1,
+          "estado_atencion": "Pendiente",
+          "estado_catalogo": "Activo",
+          "id_referencia": null,
+          "estaciones": [
+            "EST_PAC_01"
+          ],
+          "prioridad": 1,
+          "clave": [
+            1,
+            4.3,
+            3004
+          ]
+        },
+        "izquierdo": 3001,
+        "derecho": 3002,
+        "altura": 1,
+        "factor_balance": 0
+      },
+      {
+        "evento": {
+          "id_evento": 3001,
+          "magnitud": 4.1,
+          "profundidad": 20.0,
+          "epicentro": {
+            "x": 40.0,
+            "y": 100.0
+          },
+          "estacion_origen": "EST_PAC_01",
+          "fecha_hora": "2026-10-05T05:00:00Z",
+          "revision": 1,
+          "estado_atencion": "Pendiente",
+          "estado_catalogo": "Activo",
+          "id_referencia": null,
+          "estaciones": [
+            "EST_PAC_01"
+          ],
+          "prioridad": 1,
+          "clave": [
+            1,
+            4.1,
+            3001
+          ]
+        },
+        "izquierdo": null,
+        "derecho": null,
+        "altura": 0,
+        "factor_balance": 0
+      },
+      {
+        "evento": {
+          "id_evento": 3002,
+          "magnitud": 5.1,
+          "profundidad": 35.0,
+          "epicentro": {
+            "x": 60.0,
+            "y": 150.0
+          },
+          "estacion_origen": "EST_PAC_01",
+          "fecha_hora": "2026-10-05T06:00:00Z",
+          "revision": 1,
+          "estado_atencion": "Revisado",
+          "estado_catalogo": "Activo",
+          "id_referencia": null,
+          "estaciones": [
+            "EST_PAC_01"
+          ],
+          "prioridad": 2,
+          "clave": [
+            2,
+            5.1,
+            3002
+          ]
+        },
+        "izquierdo": null,
+        "derecho": null,
+        "altura": 0,
+        "factor_balance": 0
+      },
+      {
+        "evento": {
+          "id_evento": 3006,
+          "magnitud": 6.2,
+          "profundidad": 30.0,
+          "epicentro": {
+            "x": 140.0,
+            "y": 190.0
+          },
+          "estacion_origen": "EST_PAC_01",
+          "fecha_hora": "2026-10-05T10:00:00Z",
+          "revision": 1,
+          "estado_atencion": "Revisado",
+          "estado_catalogo": "Activo",
+          "id_referencia": null,
+          "estaciones": [
+            "EST_PAC_01"
+          ],
+          "prioridad": 3,
+          "clave": [
+            3,
+            6.2,
+            3006
+          ]
+        },
+        "izquierdo": 3007,
+        "derecho": 3003,
+        "altura": 1,
+        "factor_balance": 0
+      },
+      {
+        "evento": {
+          "id_evento": 3007,
+          "magnitud": 4.6,
+          "profundidad": 18.0,
+          "epicentro": {
+            "x": 160.0,
+            "y": 210.0
+          },
+          "estacion_origen": "EST_PAC_01",
+          "fecha_hora": "2026-10-05T11:00:00Z",
+          "revision": 1,
+          "estado_atencion": "Pendiente",
+          "estado_catalogo": "Activo",
+          "id_referencia": 3006,
+          "estaciones": [
+            "EST_PAC_01"
+          ],
+          "prioridad": 3,
+          "clave": [
+            3,
+            4.6,
+            3007
+          ]
+        },
+        "izquierdo": null,
+        "derecho": null,
+        "altura": 0,
+        "factor_balance": 0
+      },
+      {
+        "evento": {
+          "id_evento": 3003,
+          "magnitud": 6.8,
+          "profundidad": 15.0,
+          "epicentro": {
+            "x": 80.0,
+            "y": 180.0
+          },
+          "estacion_origen": "EST_PAC_01",
+          "fecha_hora": "2026-10-05T07:00:00Z",
+          "revision": 1,
+          "estado_atencion": "Revisado",
+          "estado_catalogo": "Activo",
+          "id_referencia": null,
+          "estaciones": [
+            "EST_PAC_01"
+          ],
+          "prioridad": 3,
+          "clave": [
+            3,
+            6.8,
+            3003
+          ]
+        },
+        "izquierdo": null,
+        "derecho": null,
+        "altura": 0,
+        "factor_balance": 0
+      }
+    ]
+  },
+  "arbol_bst": {
+    "raiz": 3001,
+    "nodos": [
+      {
+        "id_evento": 3001,
+        "izquierdo": null,
+        "derecho": 3004
+      },
+      {
+        "id_evento": 3004,
+        "izquierdo": null,
+        "derecho": 3002
+      },
+      {
+        "id_evento": 3002,
+        "izquierdo": null,
+        "derecho": 3005
+      },
+      {
+        "id_evento": 3005,
+        "izquierdo": null,
+        "derecho": 3007
+      },
+      {
+        "id_evento": 3007,
+        "izquierdo": null,
+        "derecho": 3006
+      },
+      {
+        "id_evento": 3006,
+        "izquierdo": null,
+        "derecho": 3003
+      },
+      {
+        "id_evento": 3003,
+        "izquierdo": null,
+        "derecho": null
+      }
+    ]
+  },
+  "historico": [],
+  "cola_reportes": [],
+  "metricas": {
+    "reportes": {
+      "nuevos": 0,
+      "correcciones_aceptadas": 0,
+      "reactivados": 0,
+      "confirmaciones": 0,
+      "conflictos": 0,
+      "descartados_antiguos": 0,
+      "rechazados_retirados": 0,
+      "archivos_masivos": 0,
+      "eventos_archivados": 0
+    },
+    "rotaciones": {
+      "LL": 0,
+      "RR": 0,
+      "LR": 0,
+      "RL": 0,
+      "giros_simples": 0,
+      "giros_izquierda": 0,
+      "giros_derecha": 0
+    }
+  }
+}

@@ -14,9 +14,9 @@ class Evento:
         estacion_origen: Estacion,
         fecha_hora: str = None,
         estado: str = "Pendiente",
-        estado_catalogo: str = "Activo",  # <-- "Activo", "Archivado" o "Retirado"
+        estado_catalogo: str = "Activo",  # <-- "Activo", "Archivado" or "Retirado"
         id_referencia = None,
-        revision: int = 1  # <-- Recibe revisión con valor por defecto 1
+        revision: int = 1  # <-- Receives revision with default value 1
     ):
         self.id = int(id_evento)
         self.magnitud = round(float(magnitud), 1)
@@ -24,31 +24,31 @@ class Evento:
         self.epicentro = epicentro
         self.estacion_origen = estacion_origen
 
-        # Inicializa la lista con la estación origen obligatoria
+        # Initialize the list with the mandatory origin station
         self.estaciones = [estacion_origen.id_estacion] if estacion_origen else []
 
-        # Fecha ISO 8601 en UTC
+        # ISO 8601 date in UTC
         self.fecha_hora = (
             fecha_hora
             if fecha_hora
             else datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         )
 
-        # Estado de revisión/atención
+        # Review/attention status
         self.revision = int(revision)
         self.estado = estado
 
-        # Estado del ciclo de vida en el catálogo ("Activo", "Archivado", "Retirado")
+        # Catalog lifecycle status ("Activo", "Archivado", "Retirado")
         self.estado_catalogo = estado_catalogo
 
-        # Atributo para asociación sísmica
+        # Attribute for seismic association
         self.id_referencia = id_referencia
 
-        # Prioridad y Clave para el Árbol AVL
+        # Priority and key for the AVL Tree
         self.prioridad = 0
         self.clave = (self.prioridad, self.magnitud, self.id)
 
-        # Calcula la prioridad e inserta la clave
+        # Calculate the priority and insert the key
         self.calcular_prioridad()
 
         self.acceso_costoso = False
@@ -56,7 +56,7 @@ class Evento:
     @property
     def fecha(self) -> datetime:
         """
-        Convierte fecha_hora a objeto datetime para los cálculos de asociación.
+        Converts fecha_hora to a datetime object for association calculations.
         """
         if isinstance(self.fecha_hora, datetime):
             return self.fecha_hora

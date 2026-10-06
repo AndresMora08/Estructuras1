@@ -1,3 +1,4 @@
+
 from typing import Optional
 from Modelos.Zona import Zona
 
@@ -18,7 +19,7 @@ class Estacion:
     self.y = round(float(y), 1)
     self.zona: Optional[Zona] = zona
 
-    # Validamos inmediatamente si las coordenadas están dentro de la zona asignada
+    # We immediately validate whether the coordinates are within the assigned zone
     if self.zona and not self.zona.contiene_punto(self.x, self.y):
       raise ValueError(
           f"Las coordenadas ({self.x}, {self.y}) están fuera de la zona"
@@ -27,8 +28,9 @@ class Estacion:
 
   @property
   def es_poblada(self) -> bool:
-    """Consulta si la estación pertenece a una zona poblada."""
+    """Checks whether the station belongs to a populated zone."""
     return self.zona.poblada if self.zona else False
 
   def __repr__(self):
     return f"Estacion({self.id_estacion}, '{self.nombre}', ({self.x}, {self.y}))"
+
