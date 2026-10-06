@@ -14,6 +14,7 @@ from Modelos.Zona import Zona
 from Logica.controlador_json import ControladorJSON
 from Modelos.BST import ArbolBST
 
+
 class Escenario:
 
     def __init__(
@@ -215,44 +216,31 @@ class Escenario:
         return funcion_modificadora(*args, **kwargs)
 
     def eliminar_evento_por_id(self, id_evento):
-    
-     if id_evento not in self.dict_eventos:
-        return False, "Evento no encontrado."
+        if id_evento not in self.dict_eventos:
+            return False, "Evento no encontrado."
 
-     evento = self.dict_eventos[id_evento]
+        evento = self.dict_eventos[id_evento]
 
-     self.guardar_estado_pila()
+        self.guardar_estado_pila()
 
-     try:
-        if hasattr(evento, "clave"):
+        try:
+            if hasattr(evento, "clave"):
+                if self.arbol_avl is not None:
+                    self.arbol_avl.eliminar(evento.clave, self.L)
 
-            if self.arbol_avl is not None:
-                self.arbol_avl.eliminar(
-                    evento.clave,
-                    self.L
-                )
+                if self.arbol_bst is not None:
+                    self.arbol_bst.eliminar(evento.clave, self.L)
 
-            if self.arbol_bst is not None:
-                self.arbol_bst.eliminar(
-                    evento.clave,
-                    self.L
-                )
+            del self.dict_eventos[id_evento]
 
-        del self.dict_eventos[id_evento]
+            evento.estado_catalogo = "Retirado"
+            self.historico.append(evento)
 
-        evento.estado_catalogo = "Retirado"
-        self.historico.append(evento)
+            return True, f"SIS-{id_evento:06d} eliminado correctamente."
 
-        return True, (
-            f"SIS-{id_evento:06d} eliminado correctamente."
-        )
-
-     except Exception:
-        self.deshacer_ultima_accion()
-
-        return False, (
-            "No se pudo eliminar el evento."
-        )
+        except Exception:
+            self.deshacer_ultima_accion()
+            return False, "No se pudo eliminar el evento."
 
     def archivar_evento_por_id(self, id_evento: int):
         if not self.arbol_avl or not self.arbol_avl.raiz:
@@ -282,25 +270,26 @@ class Escenario:
 
         self.guardar_estado_pila()
         try:
+            # Every step runs for EACH archived event (AVL, BST, active dict, history)
             for ev in eventos_a_archivar:
-    
-              if self.arbol_avl is not None:
-                 self.arbol_avl.eliminar(
-                   ev.clave,
-                  self.L
-                  )
+                if self.arbol_avl is not None:
+                    # Depth refresh is deferred and done once after the loop
+                    self.arbol_avl.eliminar(ev.clave, self.L, actualizar=False)
 
-            if self.arbol_bst is not None:
-              self.arbol_bst.eliminar(
-              ev.clave,
-              self.L
-            )
+                if self.arbol_bst is not None:
+                    self.arbol_bst.eliminar(ev.clave, self.L)
 
-            if ev.id in self.dict_eventos:
-                del self.dict_eventos[ev.id]
+                if ev.id in self.dict_eventos:
+                    del self.dict_eventos[ev.id]
 
-            ev.estado_catalogo = "Archivado"
-            self.historico.append(ev)
+                ev.estado_catalogo = "Archivado"
+                self.historico.append(ev)
+
+            if self.arbol_avl is not None:
+                self.arbol_avl.actualizar_profundidades(self.L)
+
+            self.metricas_reportes["archivos_masivos"] += 1
+            self.metricas_reportes["eventos_archivados"] += cant_nodos
         except Exception as e:
             self.deshacer_ultima_accion()
             return False, f"Error al archivar la rama: {str(e)}", None
